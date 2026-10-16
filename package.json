@@ -1,0 +1,17 @@
+{
+  "name": "warehouse-management",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node frontend/server.js",
+    "format": "prettier --write frontend .prettierrc.json package.json",
+    "format:check": "prettier --check frontend .prettierrc.json package.json"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
