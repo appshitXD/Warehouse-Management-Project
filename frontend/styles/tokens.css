@@ -1,0 +1,37 @@
+/* Neutral enterprise tokens, shared by the existing application. */
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --ink: #171717;
+  --muted: #737373;
+  --primary: #171717;
+  --primary-hover: #303030;
+  --line: #e5e5e5;
+  --control-border: #8f8f8f;
+  --red: #b91c1c;
+  --success: #047857;
+  --warning-text: #92400e;
+  --success-bg: #ecfdf5;
+  --warning-bg: #fffbeb;
+  --error-bg: #fef2f2;
+  --hover-bg: #f5f5f5;
+  --nav-active-bg: #ededed;
+  --font:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  --text-body: 14px;
+  --text-caption: 12px;
+  --radius: 6px;
+  --radius-panel: 12px;
+  --shadow-panel: 0 1px 2px #17171704;
+  --shadow-dialog: 0 16px 48px #17171726;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --sidebar-width: 256px;
+  --sidebar-compact-width: 72px;
+  --header-height: 56px;
+}
