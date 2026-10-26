@@ -26,7 +26,7 @@ import com.group4.warehouse.common.DatabaseErrors;
 public class WarehouseRepository {
 
     private static final String SELECT_COLUMNS =
-            "SELECT warehouse_id, warehouse_name, warehouse_address FROM warehouse";
+            "SELECT warehouse_id, warehouse_name, address FROM warehouse";
 
     private final DataSource dataSource;
 
@@ -73,7 +73,7 @@ public class WarehouseRepository {
     }
 
     public void insert(Warehouse warehouse) {
-        String sql = "INSERT INTO warehouse (warehouse_id, warehouse_name, warehouse_address) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO warehouse (warehouse_id, warehouse_name, address) VALUES (?, ?, ?)";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -94,8 +94,8 @@ public class WarehouseRepository {
      */
     public boolean update(String id, String name, String address) {
         String sql = "UPDATE warehouse"
-                + " SET warehouse_name    = COALESCE(?, warehouse_name),"
-                + "     warehouse_address = IF(? IS NULL, warehouse_address, NULLIF(?, ''))"
+                + " SET warehouse_name = COALESCE(?, warehouse_name),"
+                + "     address        = IF(? IS NULL, address, NULLIF(?, ''))"
                 + " WHERE warehouse_id = ?";
 
         try (Connection conn = dataSource.getConnection();
@@ -127,6 +127,6 @@ public class WarehouseRepository {
         return new Warehouse(
                 rs.getString("warehouse_id"),
                 rs.getString("warehouse_name"),
-                rs.getString("warehouse_address"));
+                rs.getString("address"));
     }
 }
