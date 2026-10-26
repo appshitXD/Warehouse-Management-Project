@@ -1,4 +1,4 @@
-package com.group4.warehouse.controller;
+package com.group4.warehouse.health;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
