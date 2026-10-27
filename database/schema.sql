@@ -26,7 +26,7 @@ USE warehouse_db;
 
 CREATE TABLE warehouse (
     warehouse_id       VARCHAR(40)  NOT NULL,
-    warehouse_address  VARCHAR(250) NULL,
+    address            VARCHAR(250) NULL,
     warehouse_name     VARCHAR(120) NOT NULL,
     CONSTRAINT pk_warehouse        PRIMARY KEY (warehouse_id),
     CONSTRAINT uq_warehouse_name   UNIQUE (warehouse_name),
@@ -64,7 +64,7 @@ CREATE TABLE aisle (
 CREATE TABLE bin (
     position           VARCHAR(40)  NOT NULL,
     aisle_id           VARCHAR(40)  NOT NULL,
-    bin_name           VARCHAR(120) NULL,
+    name               VARCHAR(120) NULL,
     zone_id            VARCHAR(40)  NOT NULL,
     warehouse_id       VARCHAR(40)  NOT NULL,
     CONSTRAINT pk_bin              PRIMARY KEY (warehouse_id, zone_id, aisle_id, position),
@@ -108,11 +108,11 @@ CREATE TABLE supplier (
 
 CREATE TABLE customer (
     customer_id        VARCHAR(40)  NOT NULL,
-    customer_name      VARCHAR(120) NOT NULL,
-    customer_address   VARCHAR(250) NULL,
-    customer_phone     VARCHAR(20)  NULL,
+    name               VARCHAR(120) NOT NULL,
+    address            VARCHAR(250) NULL,
+    phone              VARCHAR(20)  NULL,
     CONSTRAINT pk_customer         PRIMARY KEY (customer_id),
     CONSTRAINT ck_customer_id      CHECK (TRIM(customer_id) <> ''),
-    CONSTRAINT ck_customer_name    CHECK (TRIM(customer_name) <> ''),
-    CONSTRAINT ck_customer_phone   CHECK (customer_phone IS NULL OR customer_phone REGEXP '^[0-9+() -]{6,20}$')
+    CONSTRAINT ck_customer_name    CHECK (TRIM(name) <> ''),
+    CONSTRAINT ck_customer_phone   CHECK (phone IS NULL OR phone REGEXP '^[0-9+() -]{6,20}$')
 ) ENGINE = InnoDB;
