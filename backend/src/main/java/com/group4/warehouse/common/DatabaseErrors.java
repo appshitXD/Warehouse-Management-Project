@@ -51,8 +51,8 @@ public final class DatabaseErrors {
             case 1062: // duplicate primary key or UNIQUE value
                 return new ApiException(HttpStatus.CONFLICT, "DUPLICATE",
                         text.contains("PRIMARY")
-                                ? "A " + entity + " with this ID already exists."
-                                : "A " + entity + " with this name already exists.", e);
+                                ? article(entity) + " " + entity + " with this ID already exists."
+                                : article(entity) + " " + entity + " with this name already exists.", e);
             case 1451: // parent row still referenced by a child row
                 return new ApiException(HttpStatus.CONFLICT, "IN_USE",
                         "This " + entity + " cannot be deleted because other records still use it. "
@@ -75,6 +75,11 @@ public final class DatabaseErrors {
                 return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "DATABASE_ERROR",
                         "Unexpected database error. Please try again.", e);
         }
+    }
+
+    /** "A warehouse", but "An aisle". */
+    private static String article(String noun) {
+        return "aeiou".indexOf(Character.toLowerCase(noun.charAt(0))) >= 0 ? "An" : "A";
     }
 
     private static String firstGroup(Pattern pattern, String text) {
