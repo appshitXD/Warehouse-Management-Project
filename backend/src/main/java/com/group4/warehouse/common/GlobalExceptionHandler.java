@@ -14,6 +14,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import tools.jackson.core.JacksonException;
+
 /**
  * Catches exceptions from every controller and returns an ApiError JSON body
  * instead of a stack trace or a Whitelabel page.
@@ -40,9 +42,21 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("Please correct the highlighted fields.", "VALIDATION_FAILED", fields));
     }
 
-    /** Body is missing or is not valid JSON (e.g. "reorderLevel": "abc"). */
+    /**
+     * Body is missing, is not valid JSON, or a value has the wrong type
+     * (e.g. "reorderLevel": 12.5 or "abc" for a whole-number field).
+     * When Jackson can tell which field failed, report it like a validation error.
+     */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException e) {
+        if (e.getCause() instanceof JacksonException jackson && !jackson.getPath().isEmpty()) {
+            String field = jackson.getPath().get(jackson.getPath().size() - 1).getPropertyName();
+            if (field != null) {
+                return ResponseEntity.badRequest().body(new ApiError(
+                        "Please correct the highlighted fields.", "VALIDATION_FAILED",
+                        Map.of(field, "Invalid value: wrong type for this field (e.g. a decimal where a whole number is required).")));
+            }
+        }
         return ResponseEntity.badRequest()
                 .body(new ApiError("The request body is missing or is not valid JSON.", "INVALID_JSON"));
     }

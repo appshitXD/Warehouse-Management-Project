@@ -82,7 +82,7 @@ CREATE TABLE product (
     product_id          VARCHAR(40)    NOT NULL,
     unit                VARCHAR(20)    NOT NULL,
     storage_requirement VARCHAR(120)   NOT NULL,
-    reorder_level       DECIMAL(12, 3) NOT NULL DEFAULT 0,
+    reorder_level       INT            NOT NULL DEFAULT 0,
     product_name        VARCHAR(120)   NOT NULL,
     CONSTRAINT pk_product              PRIMARY KEY (product_id),
     CONSTRAINT ck_product_id           CHECK (TRIM(product_id) <> ''),

@@ -1,10 +1,10 @@
 package com.group4.warehouse.product;
 
-import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -18,7 +18,7 @@ import com.group4.warehouse.common.DatabaseErrors;
 /**
  * All SQL for the product table. Same rules as the other repositories:
  * PreparedStatement parameters only, try-with-resources, DatabaseErrors.translate on failure.
- * New here: reorder_level is DECIMAL, so it is read and written with get/setBigDecimal.
+ * New here: reorder_level is INT; setObject(..., Types.INTEGER) lets the PATCH pass NULL (= keep).
  */
 @Repository
 public class ProductRepository {
@@ -80,7 +80,7 @@ public class ProductRepository {
             ps.setString(2, product.name());
             ps.setString(3, product.unit());
             ps.setString(4, product.storage());
-            ps.setBigDecimal(5, product.reorderLevel());
+            ps.setInt(5, product.reorderLevel());
             ps.executeUpdate();
         } catch (SQLException e) {
             throw DatabaseErrors.translate(e, "product");
@@ -92,7 +92,7 @@ public class ProductRepository {
      * All columns are NOT NULL, so COALESCE is enough (nothing can be cleared).
      * @return false if no product has this ID
      */
-    public boolean update(String id, String name, String unit, String storage, BigDecimal reorderLevel) {
+    public boolean update(String id, String name, String unit, String storage, Integer reorderLevel) {
         String sql = "UPDATE product"
                 + " SET product_name        = COALESCE(?, product_name),"
                 + "     unit                = COALESCE(?, unit),"
@@ -105,7 +105,7 @@ public class ProductRepository {
             ps.setString(1, name);
             ps.setString(2, unit);
             ps.setString(3, storage);
-            ps.setBigDecimal(4, reorderLevel);
+            ps.setObject(4, reorderLevel, Types.INTEGER);
             ps.setString(5, id);
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -132,6 +132,6 @@ public class ProductRepository {
                 rs.getString("product_name"),
                 rs.getString("unit"),
                 rs.getString("storage_requirement"),
-                rs.getBigDecimal("reorder_level"));
+                rs.getInt("reorder_level"));
     }
 }

@@ -1,6 +1,5 @@
 package com.group4.warehouse.product;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -29,7 +28,7 @@ public class ProductService {
 
     public Product create(CreateProductRequest request) {
         // Same as the column's DEFAULT 0, written here so the response shows the real value.
-        BigDecimal reorderLevel = request.reorderLevel() == null ? BigDecimal.ZERO : request.reorderLevel();
+        int reorderLevel = request.reorderLevel() == null ? 0 : request.reorderLevel();
         Product product = new Product(
                 Text.trim(request.id()),
                 Text.trim(request.name()),

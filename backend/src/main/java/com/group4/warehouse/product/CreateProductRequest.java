@@ -1,16 +1,13 @@
 package com.group4.warehouse.product;
 
-import java.math.BigDecimal;
-
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
  * Body of POST /api/products.
- * reorderLevel follows the column type DECIMAL(12,3) and the CHECK ck_product_reorder (>= 0).
+ * reorderLevel follows the column type INT and the CHECK ck_product_reorder (>= 0).
  * If it is missing, the database DEFAULT 0 applies (see ProductService).
  */
 public record CreateProductRequest(
@@ -33,8 +30,7 @@ public record CreateProductRequest(
         @Size(max = 120, message = "Storage requirement must be at most 120 characters.")
         String storage,
 
-        @DecimalMin(value = "0", message = "Reorder level cannot be negative.")
-        @Digits(integer = 9, fraction = 3,
-                message = "Reorder level allows at most 9 digits before and 3 after the decimal point.")
-        BigDecimal reorderLevel) {
+        // Integer: a fraction such as 12.5 is rejected as invalid JSON (see application.properties).
+        @Min(value = 0, message = "Reorder level cannot be negative.")
+        Integer reorderLevel) {
 }
