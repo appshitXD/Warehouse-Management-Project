@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import com.group4.warehouse.common.ApiException;
 import com.group4.warehouse.common.Text;
 
-/** Business rules for products: trimming input, default reorder level, 404 when the ID does not exist. */
+/** Business rules for products: trimming input, 404 when the ID does not exist. */
 @Service
 public class ProductService {
 
@@ -27,14 +27,12 @@ public class ProductService {
     }
 
     public Product create(CreateProductRequest request) {
-        // Same as the column's DEFAULT 0, written here so the response shows the real value.
-        int reorderLevel = request.reorderLevel() == null ? 0 : request.reorderLevel();
         Product product = new Product(
                 Text.trim(request.id()),
                 Text.trim(request.name()),
                 Text.trim(request.unit()),
                 Text.trim(request.storage()),
-                reorderLevel);
+                request.reorderLevel());
         repository.insert(product);
         return get(product.id());
     }

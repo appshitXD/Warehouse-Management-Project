@@ -79,16 +79,17 @@ CREATE TABLE bin (
 -- ---------------------------------------------------------------------
 
 CREATE TABLE product (
-    product_id          VARCHAR(40)    NOT NULL,
+    product_id          CHAR(10)       NOT NULL,
     unit                VARCHAR(20)    NOT NULL,
-    storage_requirement VARCHAR(120)   NOT NULL,
-    reorder_level       INT            NOT NULL DEFAULT 0,
-    product_name        VARCHAR(120)   NOT NULL,
+    storage_requirement VARCHAR(50)    NOT NULL,
+    reorder_level       INT            NOT NULL,
+    product_name        VARCHAR(100)   NOT NULL,
     CONSTRAINT pk_product              PRIMARY KEY (product_id),
     CONSTRAINT ck_product_id           CHECK (TRIM(product_id) <> ''),
     CONSTRAINT ck_product_name         CHECK (TRIM(product_name) <> ''),
     CONSTRAINT ck_product_unit         CHECK (TRIM(unit) <> ''),
-    CONSTRAINT ck_product_reorder      CHECK (reorder_level >= 0)
+    CONSTRAINT ck_product_storage      CHECK (storage_requirement IN ('Ambient', 'Dry Ambient', 'Cold', 'Hazardous')),
+    CONSTRAINT ck_product_reorder      CHECK (reorder_level > 0)
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
