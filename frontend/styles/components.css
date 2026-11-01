@@ -39,19 +39,28 @@
 .brand {
   display: flex;
   align-items: center;
-  font-weight: 700;
-  font-size: 15px;
-  gap: 8px;
+  font-weight: 650;
+  font-size: 17px;
+  letter-spacing: -0.55px;
+  gap: 10px;
+  color: var(--ink);
 }
 .brand-icon {
-  background: var(--primary);
-  color: white;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius);
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
+}
+.brand-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.brand:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 5px;
+  border-radius: 3px;
 }
 .sidebar-toggle-btn {
   border: 0;
@@ -1447,4 +1456,44 @@ main > .toolbar {
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   margin-bottom: 16px;
+}
+/* Location hierarchy and repeatable staff contact fields. */
+.location-zone + .location-zone {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.location-zone > .row-between,
+.location-aisle > .row-between {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.location-aisle {
+  margin-top: 16px;
+}
+.location-aisle h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.staff-phones {
+  margin-top: 20px;
+}
+.staff-phones h3 {
+  font-size: 14px;
+  margin: 0 0 6px;
+}
+.phone-row {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  margin: 12px 0;
+}
+.phone-row .field {
+  flex: 1;
+  min-width: 0;
+}
+.phone-row .remove-staff-phone {
+  flex-shrink: 0;
 }

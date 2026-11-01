@@ -1,69 +1,109 @@
 import { esc, num } from '../utils/format.js';
+
 export function createLocations({ ui, ctx, selectors }) {
   function locations() {
+    const s = ctx.state;
     const query = ctx.filters.search.toLocaleLowerCase('en');
-    const warehouseMatches = (w) =>
-      [w.id, w.name, w.address]
-        .join(' ')
-        .toLocaleLowerCase('en')
-        .includes(query);
-    const visibleBins = (w) =>
-      ctx.state.bins.filter(
+    const matches = (...values) =>
+      values.join(' ').toLocaleLowerCase('en').includes(query);
+    const warehouseMatches = (w) => matches(w.id, w.name, w.address);
+    const zoneMatches = (z) => matches(z.zoneId, z.name);
+    const aisleMatches = (a) => matches(a.aisleId, a.name);
+    const binsFor = (w, z, a) =>
+      s.bins.filter(
         (b) =>
           b.warehouseId === w.id &&
-          (warehouseMatches(w) ||
-            [b.id, b.zone, b.aisle, b.position, b.name]
-              .join(' ')
-              .toLocaleLowerCase('en')
-              .includes(query)),
+          b.zone === z.zoneId &&
+          b.aisle === a.aisleId,
       );
-    const warehouses = ctx.state.warehouses.filter(
+    const zonesFor = (w) => s.zones.filter((z) => z.warehouseId === w.id);
+    const aislesFor = (w, z) =>
+      s.aisles.filter((a) => a.warehouseId === w.id && a.zone === z.zoneId);
+    const binMatches = (b) =>
+      matches(b.id, b.name, b.zone, b.aisle, b.position);
+    const zoneVisible = (w, z) =>
+      warehouseMatches(w) ||
+      zoneMatches(z) ||
+      aislesFor(w, z).some(
+        (a) => aisleMatches(a) || binsFor(w, z, a).some(binMatches),
+      );
+    const warehouses = s.warehouses.filter(
       (w) =>
-        (!ctx.filters.warehouse || w.id === ctx.filters.warehouse) &&
-        (warehouseMatches(w) || visibleBins(w).length),
+        (!ctx.filters.warehouse || ctx.filters.warehouse === w.id) &&
+        (warehouseMatches(w) || zonesFor(w).some((z) => zoneVisible(w, z))),
     );
     const actions =
       ui.actionButton('warehouse', 'Add warehouse') +
+      ui.actionButton('zone', 'Add zone', 'secondary') +
+      ui.actionButton('aisle', 'Add aisle', 'secondary') +
       ui.actionButton('bin', 'Add bin', 'secondary');
-    if (!ctx.state.warehouses.length)
+    const heading = ui.heading(
+      'Locations',
+      'Warehouse / Zone / Aisle / Position. Each location belongs to its parent.',
+      actions,
+    );
+    if (!s.warehouses.length)
       return (
-        ui.heading('Locations', 'Warehouse → Zone → Aisle → Bin.', actions) +
+        heading +
         ui.emptyState(
           'No warehouses yet.',
-          'Add a warehouse and bins to start storing products.',
+          'Create a warehouse, then add zones, aisles and bins.',
         )
       );
     return (
-      ui.heading(
-        'Locations',
-        'Warehouse / Zone / Aisle / Position. Multiple products can share a bin.',
-        actions,
-      ) +
-      ui.toolbar('Search warehouse, bin address or name…') +
+      heading +
+      ui.toolbar('Search location IDs, names or addresses…') +
       (!warehouses.length
-        ? '<p class="empty">No matching locations.</p>'
+        ? ui.emptyState(
+            'No matching locations.',
+            'Adjust the search or warehouse filter.',
+          )
         : '') +
       `<div class="location-grid">${warehouses
         .map(
           (w) =>
-            `<section class="card">${ui.cardTitle(esc(w.name), `${esc(w.id)} · ${esc(w.address)}`, ui.recordActions('warehouse', w.id))}<div class="card-body">${[
-              ...new Set(visibleBins(w).map((b) => b.zone)),
-            ]
-              .map(
-                (z) =>
-                  `<h3 class="zone-heading">Zone ${esc(z)}</h3><div class="bin-grid">${visibleBins(
-                    w,
-                  )
-                    .filter((b) => b.warehouseId === w.id && b.zone === z)
-                    .map((b) => {
-                      const stocks = ctx.state.stock.filter(
-                        (s) => s.binId === b.id && s.quantity > 0,
-                      );
-                      return `<div class="bin-tile ${stocks.length ? '' : 'empty-bin'}"><strong>${esc(b.zone)}-${esc(b.aisle)}-${esc(b.position)}</strong><small>${esc(b.name || 'Unnamed bin')}</small><div class="bin-summary">${ui.badge(stocks.length ? `${stocks.length} ${stocks.length === 1 ? 'product' : 'products'}` : 'Empty', stocks.length ? 'green' : 'gray')}</div>${stocks.map((s) => `<small>${esc(selectors.product(s.productId).id)} · ${num(s.quantity)} ${esc(selectors.product(s.productId).unit)}</small>`).join('')}${ui.recordActions('bin', b.id)}</div>`;
-                    })
-                    .join('')}</div>`,
-              )
-              .join('')}</div></section>`,
+            `<section class="card">${ui.cardTitle(esc(w.name), `${esc(w.id)} · ${esc(w.address)}`, ui.recordActions('warehouse', w.id))}<div class="card-body">${
+              zonesFor(w)
+                .filter((z) => zoneVisible(w, z))
+                .map(
+                  (z) =>
+                    `<section class="location-zone"><div class="row-between"><h3 class="zone-heading">Zone ${esc(z.zoneId)} · ${esc(z.name)}</h3>${ui.recordActions('zone', z.id)}</div>${
+                      aislesFor(w, z)
+                        .filter(
+                          (a) =>
+                            warehouseMatches(w) ||
+                            zoneMatches(z) ||
+                            aisleMatches(a) ||
+                            binsFor(w, z, a).some(binMatches),
+                        )
+                        .map(
+                          (a) =>
+                            `<section class="location-aisle"><div class="row-between"><h4>Aisle ${esc(a.aisleId)} · ${esc(a.name)}</h4>${ui.recordActions('aisle', a.id)}</div><div class="bin-grid">${
+                              binsFor(w, z, a)
+                                .filter(
+                                  (b) =>
+                                    warehouseMatches(w) ||
+                                    zoneMatches(z) ||
+                                    aisleMatches(a) ||
+                                    binMatches(b),
+                                )
+                                .map((b) => {
+                                  const stock = s.stock.filter(
+                                    (row) =>
+                                      row.binId === b.id && row.quantity > 0,
+                                  );
+                                  return `<div class="bin-tile ${stock.length ? '' : 'empty-bin'}"><strong>${esc(b.position)}</strong><small>${esc(b.name || 'Unnamed bin')}</small><small>${esc(selectors.binName(b.id))}</small><div class="bin-summary">${ui.badge(stock.length ? `${stock.length} ${stock.length === 1 ? 'product' : 'products'}` : 'Empty', stock.length ? 'green' : 'gray')}</div>${stock.map((row) => `<small>${esc(row.productId)} · ${num(row.quantity)} ${esc(selectors.product(row.productId).unit)}</small>`).join('')}${ui.recordActions('bin', b.id)}</div>`;
+                                })
+                                .join('') ||
+                              '<p class="muted">No bins in this aisle.</p>'
+                            }</div></section>`,
+                        )
+                        .join('') ||
+                      '<p class="muted">No aisles in this zone.</p>'
+                    }</section>`,
+                )
+                .join('') || '<p class="muted">No zones in this warehouse.</p>'
+            }</div></section>`,
         )
         .join('')}</div>`
     );

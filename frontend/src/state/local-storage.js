@@ -13,10 +13,19 @@ export function createStorage({ env, storage, ctx, config }) {
         'Saved local data is invalid JSON. It has been kept unchanged. Restore the saved data and retry.',
       );
     }
-    if (!saved || ![3, 4].includes(saved.version))
+    if (!saved || ![3, 4, 5].includes(saved.version))
       throw new Error(
         'Saved local data has an unsupported format. It has been kept unchanged. Restore the saved data and retry.',
       );
+    for (const key of Object.keys(initialState()).filter(
+      (key) =>
+        key !== 'version' &&
+        (saved.version === 5 || !['zones', 'aisles'].includes(key)),
+    ))
+      if (!Array.isArray(saved[key]))
+        throw new Error(
+          'Saved local data is incomplete. It has been kept unchanged. Restore the saved data and retry.',
+        );
     return saved;
   }
 
@@ -24,8 +33,8 @@ export function createStorage({ env, storage, ctx, config }) {
     // Validate before any cleanup or backup; unreadable data must remain untouched.
     const saved = readLocal();
     let next = saved || initialState();
-    if (saved?.version === 3) {
-      const backupKey = storage.key + '.schema-v3-backup';
+    if (saved && saved.version < 5) {
+      const backupKey = storage.key + '.schema-v' + saved.version + '-backup';
       if (!env.localStorage.getItem(backupKey))
         env.localStorage.setItem(backupKey, JSON.stringify(saved));
       next = alignSchema(saved);

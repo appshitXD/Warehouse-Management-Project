@@ -3,7 +3,15 @@ export function createSelectors({ ctx }) {
     ctx.state.customers.find((c) => c.id === id)?.name || id;
 
   const personMatches = (p) =>
-    [p.id, p.name, p.phone, p.address]
+    [
+      p.id,
+      p.name,
+      p.phone,
+      ...(p.phones || []),
+      p.address,
+      warehouse(p.warehouseId)?.name,
+      staffName(p.supervisorId),
+    ]
       .join(' ')
       .toLocaleLowerCase('en')
       .includes(ctx.filters.search.toLocaleLowerCase('en'));
