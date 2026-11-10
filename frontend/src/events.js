@@ -80,6 +80,18 @@ export function bindEvents({
     const action = e.target.closest('[data-operation]');
     if (action)
       forms.openOperation(action.dataset.operation, action.dataset.edit || '');
+    if (e.target.closest('#add-staff-phone')) {
+      forms.clearErrors();
+      $('#staff-phone-list').insertAdjacentHTML('beforeend', forms.phoneForm());
+      forms.describe();
+      $$('[name="phones"]').at(-1)?.focus();
+    }
+    if (e.target.closest('.remove-staff-phone')) {
+      forms.clearErrors();
+      e.target.closest('.phone-row').remove();
+      forms.describe();
+      $('#add-staff-phone').focus();
+    }
     const detail = e.target.closest('[data-detail]');
     if (detail) {
       ctx.filters.detail = detail.dataset.detail;
@@ -120,6 +132,12 @@ export function bindEvents({
     }
   });
   env.document.addEventListener('change', async (e) => {
+    if (
+      ['zone', 'aisle', 'bin'].includes(ctx.operation) &&
+      ['warehouseId', 'zone'].includes(e.target.name) &&
+      e.target.closest('#operation-form')
+    )
+      forms.syncLocation();
     if (
       ['productId', 'binId'].includes(e.target.name) &&
       e.target.closest('.line-row')

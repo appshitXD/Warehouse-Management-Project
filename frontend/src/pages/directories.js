@@ -40,18 +40,28 @@ export function createDirectories({ ctx, ui, selectors }) {
       ) +
       '<section class="card directory-card">' +
       ui.cardTitle(title + ' directory', 'Profiles and related records.') +
-      directorySearch('Search ID, name, phone or address…') +
+      directorySearch(
+        'Search ID, name, phone or address…',
+        isStaff ? ui.warehouseFilter() : '',
+      ) +
       ui.table(
         [
           'ID',
           'Name',
           'Phone',
           'Address',
+          ...(isStaff ? ['Warehouse', 'Supervisor'] : []),
           isStaff ? 'Tasks' : 'Orders',
           'Actions',
         ],
         rows
           .filter(selectors.personMatches)
+          .filter(
+            (p) =>
+              !isStaff ||
+              !ctx.filters.warehouse ||
+              p.warehouseId === ctx.filters.warehouse,
+          )
           .map(
             (p) =>
               '<tr><td>' +
@@ -59,9 +69,19 @@ export function createDirectories({ ctx, ui, selectors }) {
               '</td><td>' +
               esc(p.name) +
               '</td><td>' +
-              esc(p.phone || '—') +
+              esc((isStaff ? p.phones?.join(' · ') : p.phone) || '—') +
               '</td><td class="address-cell">' +
               esc(p.address || '—') +
+              (isStaff
+                ? '</td><td>' +
+                  esc(
+                    selectors.warehouse(p.warehouseId)?.name || 'Not assigned',
+                  ) +
+                  '</td><td>' +
+                  esc(
+                    p.supervisorId ? selectors.staffName(p.supervisorId) : '—',
+                  )
+                : '') +
               '</td><td>' +
               ctx.state[isStaff ? 'tasks' : 'orders'].filter(
                 (r) => r[isStaff ? 'staffId' : 'customerId'] === p.id,

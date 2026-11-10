@@ -1,7 +1,9 @@
 export function initialState() {
   return {
-    version: 4,
+    version: 5,
     warehouses: [],
+    zones: [],
+    aisles: [],
     bins: [],
     products: [],
     stock: [],

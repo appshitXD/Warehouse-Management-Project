@@ -62,9 +62,12 @@ export function presentFormErrors(root, summary, error) {
   };
   for (const [path, message] of Object.entries(error.fields || {})) {
     const match = /^lines\[(\d+)\]\.(productId|binId|quantity)$/.exec(path);
-    const control = match
-      ? rows[Number(match[1])]?.querySelector(`[name="${match[2]}"]`)
-      : controls.find((c) => c.name === path);
+    const phoneMatch = /^phones\[(\d+)\]$/.exec(path);
+    const control = phoneMatch
+      ? controls.filter((c) => c.name === 'phones')[Number(phoneMatch[1])]
+      : match
+        ? rows[Number(match[1])]?.querySelector(`[name="${match[2]}"]`)
+        : controls.find((c) => c.name === path);
     mark(control, message);
   }
   controls

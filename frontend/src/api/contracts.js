@@ -1,3 +1,4 @@
+import { alignSchema } from '../state/schema.js';
 // API boundary: IDs are strings; DECIMAL JSON strings are normalized once here.
 export class DataError extends Error {
   constructor(message) {
@@ -117,12 +118,13 @@ function movementDto(r, s, at) {
 }
 export function normalizeBootstrap(raw) {
   const d = object(raw, 'bootstrap');
+  const warehouses = mapRows(d, 'warehouses', (r, at) => ({
+    id: id(r.id, at),
+    name: text(r.name, at),
+    address: typeof r.address === 'string' ? r.address : '',
+  }));
   const s = {
-    warehouses: mapRows(d, 'warehouses', (r, at) => ({
-      id: id(r.id, at),
-      name: text(r.name, at),
-      address: typeof r.address === 'string' ? r.address : '',
-    })),
+    warehouses,
     products: mapRows(d, 'products', (r, at) => ({
       id: id(r.id, at),
       name: text(r.name, `${at}.name`),
@@ -146,6 +148,26 @@ export function normalizeBootstrap(raw) {
       id: id(r.id, at),
       name: text(r.name, at),
       phone: typeof r.phone === 'string' ? r.phone : '',
+      phones:
+        r.phones === undefined
+          ? r.phone
+            ? [text(r.phone, at + '.phone')]
+            : []
+          : list(r.phones, at + '.phones').map((value) =>
+              text(value, at + '.phones'),
+            ),
+      warehouseId:
+        r.warehouseId !== undefined &&
+        r.warehouseId !== null &&
+        r.warehouseId !== ''
+          ? ref(r.warehouseId, warehouses, at + '.warehouseId')
+          : '',
+      supervisorId:
+        r.supervisorId !== undefined &&
+        r.supervisorId !== null &&
+        r.supervisorId !== ''
+          ? id(r.supervisorId, at + '.supervisorId')
+          : '',
       address: typeof r.address === 'string' ? r.address : '',
     })),
   };
@@ -210,11 +232,6 @@ export function normalizeBootstrap(raw) {
     mapRows(d, 'movements', (r, at) => movementDto(r, s, at)),
   );
   s.counts = newest(mapRows(d, 'counts', (r, at) => countDto(r, s, at)));
-  unique(
-    s.issues.flatMap((issue) => issue.lines),
-    (line) => line.id,
-    'issues.lines',
-  );
   s.tasks = mapRows(d, 'tasks', (r, at) => ({
     id: id(r.id, at),
     name: text(r.name, at),
@@ -242,7 +259,52 @@ export function normalizeBootstrap(raw) {
   );
   unique(s.stock, (r) => `${r.productId}|${r.binId}`, 'stock');
   unique(s.history, (r) => r.id, 'history');
-  return s;
+  if (d.zones !== undefined)
+    s.zones = mapRows(d, 'zones', (r, at) => {
+      const warehouseId = ref(r.warehouseId, s.warehouses, at + '.warehouseId');
+      const zoneId = id(r.zoneId ?? r.id, at + '.zoneId');
+      return {
+        id: [warehouseId, zoneId].join('|'),
+        warehouseId,
+        zoneId,
+        name: text(r.name, at + '.name'),
+      };
+    });
+  if (d.aisles !== undefined)
+    s.aisles = mapRows(d, 'aisles', (r, at) => {
+      const warehouseId = ref(r.warehouseId, s.warehouses, at + '.warehouseId');
+      const zone = id(r.zoneId ?? r.zone, at + '.zone');
+      const aisleId = id(r.aisleId ?? r.id, at + '.aisleId');
+      return {
+        id: [warehouseId, zone, aisleId].join('|'),
+        warehouseId,
+        zone,
+        aisleId,
+        name: text(r.name, at + '.name'),
+      };
+    });
+  for (const person of s.staff) {
+    const seen = new Set([person.id]);
+    let current = person.supervisorId;
+    while (current) {
+      if (seen.has(current)) fail('Staff supervision contains a cycle.');
+      seen.add(current);
+      const supervisor = s.staff.find((p) => p.id === current);
+      if (!supervisor) fail('Staff supervisor references an unknown ID.');
+      current = supervisor.supervisorId;
+    }
+  }
+  const result = alignSchema(s);
+  unique(result.zones, (z) => z.id, 'zones');
+  unique(result.aisles, (a) => a.id, 'aisles');
+  for (const aisle of result.aisles)
+    if (
+      !result.zones.some(
+        (z) => z.warehouseId === aisle.warehouseId && z.zoneId === aisle.zone,
+      )
+    )
+      fail('Aisle references an unknown zone.');
+  return result;
 }
 export function normalizeLocations(raw, s, productId) {
   const rows = list(object(raw, 'locations').items, 'locations.items').map(

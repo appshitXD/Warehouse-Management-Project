@@ -1,3 +1,4 @@
+import { validateCatalogue } from './catalogue.js';
 import { orderLabels } from '../config.js';
 import { num, round, now } from '../utils/format.js';
 export function createStock({ selectors, ctx, storage, env }) {
@@ -28,145 +29,50 @@ export function createStock({ selectors, ctx, storage, env }) {
       validateDeletion(type.slice(7), ctx.editingId);
       return;
     }
-    if (
-      ['staff', 'customer', 'supplier', 'warehouse', 'order'].includes(type)
-    ) {
-      const rows =
-        ctx.state[
-          {
-            staff: 'staff',
-            customer: 'customers',
-            order: 'orders',
-            supplier: 'suppliers',
-            warehouse: 'warehouses',
-          }[type]
-        ];
-      assert(
-        !ctx.editingId || rows.some((r) => r.id === ctx.editingId),
-        'Record not found. Refresh the data and try again.',
-      );
-      assert(
-        payload.id && /^[\p{L}\p{N}._-]+$/u.test(payload.id),
-        'IDs can contain letters, numbers, periods, underscores and hyphens.',
-      );
-      assert(
-        !rows.some(
-          (r) =>
-            r.id.toLowerCase() === payload.id.toLowerCase() &&
-            r.id !== ctx.editingId,
-        ),
-        'This ID already exists.',
-      );
-      assert(
-        !ctx.editingId || payload.id === ctx.editingId,
-        'Record IDs cannot be changed.',
-      );
-      if (type === 'order') {
+    if (validateCatalogue(type, payload, ctx)) {
+      if (type === 'product') {
+        const old = selectors.product(ctx.editingId);
         assert(
-          ctx.state.customers.some((c) => c.id === payload.customerId),
-          'Invalid customer.',
-        );
-        assert(orderLabels[payload.status], 'Invalid order status.');
-        if (
-          ctx.editingId &&
-          ctx.state.issues.some((i) => i.orderId === ctx.editingId)
-        ) {
-          const old = rows.find((r) => r.id === ctx.editingId);
-          assert(
-            old.customerId === payload.customerId,
-            'This order already has goods issues. Its customer cannot be changed.',
-          );
-          assert(
-            payload.status !== 'cancelled',
-            'This order already has goods issues and cannot be cancelled.',
-          );
-        }
-      } else {
-        assert(payload.name, 'Name cannot be empty.');
-        assert(
-          !payload.phone || /^[+()\d .-]{5,30}$/.test(payload.phone),
-          'Invalid phone number.',
+          !old ||
+            old.unit === payload.unit ||
+            !hasReferences('product', old.id),
+          'Units cannot be changed after stock or transaction history exists.',
         );
       }
       return;
     }
-    if (type === 'bin') {
+    if (type === 'order') {
       assert(
-        selectors.warehouse(payload.warehouseId),
-        'Select a valid warehouse.',
+        /^[A-Za-z0-9_-]{1,40}$/.test(payload.id || ''),
+        'Invalid order ID.',
       );
-      for (const key of ['zone', 'aisle', 'position'])
+      const old = ctx.state.orders.find((r) => r.id === ctx.editingId);
+      assert(!ctx.editingId || old, 'Record not found.');
+      assert(!old || payload.id === old.id, 'Order IDs cannot be changed.');
+      assert(
+        !ctx.state.orders.some(
+          (r) =>
+            r.id !== ctx.editingId &&
+            r.id.toLowerCase() === payload.id.toLowerCase(),
+        ),
+        'This ID already exists.',
+      );
+      assert(
+        ctx.state.customers.some((c) => c.id === payload.customerId),
+        'Invalid customer.',
+      );
+      assert(orderLabels[payload.status], 'Invalid order status.');
+      if (old && ctx.state.issues.some((i) => i.orderId === old.id)) {
         assert(
-          payload[key] && /^[\p{L}\p{N}._-]{1,40}$/u.test(payload[key]),
-          'Zone, aisle and position must contain letters, numbers, periods, underscores or hyphens.',
+          old.customerId === payload.customerId,
+          'This order already has goods issues. Its customer cannot be changed.',
         );
-      assert(
-        !ctx.state.bins.some(
-          (b) =>
-            b.warehouseId === payload.warehouseId &&
-            b.zone.toLowerCase() === payload.zone.toLowerCase() &&
-            b.aisle.toLowerCase() === payload.aisle.toLowerCase() &&
-            b.position.toLowerCase() === payload.position.toLowerCase() &&
-            b.id !== ctx.editingId,
-        ),
-        'This bin address already exists.',
-      );
-      assert(
-        !ctx.editingId || payload.id === ctx.editingId,
-        'Bin addresses cannot be changed. Create a new bin and move stock instead.',
-      );
-      const old = selectors.bin(ctx.editingId);
-      assert(
-        !ctx.editingId || old,
-        'Record not found. Refresh the data and try again.',
-      );
-      assert(
-        !old ||
-          ['warehouseId', 'zone', 'aisle', 'position'].every(
-            (key) => old[key] === payload[key],
-          ),
-        'Bin addresses cannot be changed. Create a new bin and move stock instead.',
-      );
+        assert(
+          payload.status !== 'cancelled',
+          'This order already has goods issues and cannot be cancelled.',
+        );
+      }
       return;
-    }
-    if (type === 'product') {
-      assert(
-        payload.id && payload.name && payload.unit,
-        'Enter a product ID, name and unit.',
-      );
-      assert(
-        /^[\p{L}\p{N}._-]{1,40}$/u.test(payload.id),
-        'Invalid Product ID.',
-      );
-      assert(
-        typeof payload.storage === 'string' && payload.storage.trim(),
-        'Enter a storage requirement.',
-      );
-      assert(
-        !ctx.state.products.some(
-          (p) =>
-            p.id.toLowerCase() === payload.id.toLowerCase() &&
-            p.id !== ctx.editingId,
-        ),
-        'Product ID already exists.',
-      );
-      assert(
-        !ctx.editingId || payload.id === ctx.editingId,
-        'Product IDs cannot be changed.',
-      );
-      const old = selectors.product(ctx.editingId);
-      assert(
-        !ctx.editingId || old,
-        'Record not found. Refresh the data and try again.',
-      );
-      assert(
-        !old || old.unit === payload.unit || !hasReferences('product', old.id),
-        'Units cannot be changed after stock or transaction history exists.',
-      );
-      assert(
-        Number.isFinite(payload.reorderLevel) && payload.reorderLevel >= 0,
-        'Reorder level cannot be negative.',
-      );
     }
     if (type === 'task') assert(payload.name, 'Task name cannot be empty.');
     if (!['receipt', 'issue', 'count', 'movement'].includes(type)) return;
@@ -218,7 +124,27 @@ export function createStock({ selectors, ctx, storage, env }) {
 
   function hasReferences(type, id) {
     const s = ctx.state;
-    if (type === 'warehouse') return s.bins.some((b) => b.warehouseId === id);
+    if (type === 'warehouse')
+      return (
+        s.bins.some((b) => b.warehouseId === id) ||
+        s.zones.some((z) => z.warehouseId === id) ||
+        s.staff.some((p) => p.warehouseId === id)
+      );
+    if (type === 'zone') {
+      const z = s.zones.find((r) => r.id === id);
+      return s.aisles.some(
+        (a) => a.warehouseId === z.warehouseId && a.zone === z.zoneId,
+      );
+    }
+    if (type === 'aisle') {
+      const a = s.aisles.find((r) => r.id === id);
+      return s.bins.some(
+        (b) =>
+          b.warehouseId === a.warehouseId &&
+          b.zone === a.zone &&
+          b.aisle === a.aisleId,
+      );
+    }
     const field = type === 'product' ? 'productId' : 'binId';
     return (
       s.stock.some((r) => r[field] === id) ||
@@ -235,14 +161,18 @@ export function createStock({ selectors, ctx, storage, env }) {
   }
 
   function validateDeletion(type, id) {
-    const key = { product: 'products', warehouse: 'warehouses', bin: 'bins' }[
-      type
-    ];
+    const key = {
+      product: 'products',
+      warehouse: 'warehouses',
+      zone: 'zones',
+      aisle: 'aisles',
+      bin: 'bins',
+    }[type];
     assert(key && ctx.state[key].some((r) => r.id === id), 'Record not found.');
     assert(
       !hasReferences(type, id),
       type === 'warehouse'
-        ? 'Remove unused bins before deleting this warehouse.'
+        ? 'Remove child locations and reassign staff before deleting this warehouse.'
         : 'This record has stock or transaction history and cannot be deleted.',
     );
   }
@@ -273,15 +203,27 @@ export function createStock({ selectors, ctx, storage, env }) {
     if (type.startsWith('delete-')) {
       validatePayload(type, payload);
       const s = structuredClone(ctx.state);
-      const key = { product: 'products', warehouse: 'warehouses', bin: 'bins' }[
-        type.slice(7)
-      ];
+      const key = {
+        product: 'products',
+        warehouse: 'warehouses',
+        zone: 'zones',
+        aisle: 'aisles',
+        bin: 'bins',
+      }[type.slice(7)];
       s[key] = s[key].filter((r) => r.id !== ctx.editingId);
       storage.persist(s);
       return;
     }
     if (
-      ['staff', 'customer', 'supplier', 'warehouse', 'order'].includes(type)
+      [
+        'staff',
+        'customer',
+        'supplier',
+        'warehouse',
+        'order',
+        'zone',
+        'aisle',
+      ].includes(type)
     ) {
       validatePayload(type, payload);
       const s = structuredClone(ctx.state),
@@ -291,6 +233,8 @@ export function createStock({ selectors, ctx, storage, env }) {
           order: 'orders',
           supplier: 'suppliers',
           warehouse: 'warehouses',
+          zone: 'zones',
+          aisle: 'aisles',
         }[type],
         old = s[key].find((r) => r.id === ctx.editingId);
       if (old) Object.assign(old, payload);

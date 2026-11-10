@@ -137,6 +137,12 @@ export function createServices({
   }
 
   function saveOperation(payload) {
+    if (
+      ['zone', 'aisle', 'delete-zone', 'delete-aisle'].includes(ctx.operation)
+    )
+      throw new Error(
+        'Zone and aisle APIs are not available in the current backend. Use local mode until these endpoints are implemented.',
+      );
     if (ctx.operation.startsWith('delete-'))
       return sendMutation(
         endpoints[ctx.operation.slice(7)] +

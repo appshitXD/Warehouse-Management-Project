@@ -7,6 +7,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const assets = new Map([
   ['/', ['index.html', 'text/html']],
   ['/index.html', ['index.html', 'text/html']],
+  ['/favicon.ico', ['assets/favicon.ico', 'image/x-icon']],
 ]);
 // Enumerate only public frontend assets. Tests, server code and team folders stay private.
 async function registerAssets(directory) {
@@ -15,15 +16,21 @@ async function registerAssets(directory) {
   })) {
     const relative = `${directory}/${entry.name}`;
     if (entry.isDirectory()) await registerAssets(relative);
-    else if (entry.isFile() && /\.(js|css)$/.test(entry.name))
+    else if (entry.isFile() && /\.(js|css|svg|ico)$/.test(entry.name))
       assets.set(`/${relative}`, [
         relative,
-        entry.name.endsWith('.css') ? 'text/css' : 'text/javascript',
+        {
+          '.css': 'text/css',
+          '.js': 'text/javascript',
+          '.svg': 'image/svg+xml',
+          '.ico': 'image/x-icon',
+        }[path.extname(entry.name)],
       ]);
   }
 }
 await registerAssets('src');
 await registerAssets('styles');
+await registerAssets('assets');
 const port = Number(process.env.PORT || 5173);
 http
   .createServer(async (req, res) => {

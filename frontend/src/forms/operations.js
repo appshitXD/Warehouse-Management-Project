@@ -5,6 +5,7 @@ import {
 } from './accessibility.js';
 import { esc, num } from '../utils/format.js';
 import { orderLabels } from '../config.js';
+import { storageRequirements, locationKey } from '../domain/catalogue.js';
 export function createForms({
   $,
   $$,
@@ -26,12 +27,13 @@ export function createForms({
 
   function operationMissing(type) {
     const missing = [];
-    if (
-      ['product', 'staff', 'customer', 'supplier', 'warehouse'].includes(type)
-    )
+    if (['product', 'customer', 'supplier', 'warehouse'].includes(type))
       return missing;
-    if (type === 'bin') {
+    if (['staff', 'zone', 'aisle', 'bin'].includes(type)) {
       if (!ctx.state.warehouses.length) missing.push('warehouses');
+      if (['aisle', 'bin'].includes(type) && !ctx.state.zones.length)
+        missing.push('zones');
+      if (type === 'bin' && !ctx.state.aisles.length) missing.push('aisles');
       return missing;
     }
     if (type === 'order') {
@@ -207,6 +209,8 @@ export function createForms({
       order: 'Add customer order',
       supplier: 'Add supplier',
       warehouse: 'Add warehouse',
+      zone: 'Add zone',
+      aisle: 'Add aisle',
       bin: 'Add bin',
     };
     $('#dialog-title').textContent = id
@@ -217,6 +221,8 @@ export function createForms({
           order: 'customer order',
           supplier: 'supplier',
           warehouse: 'warehouse',
+          zone: 'zone',
+          aisle: 'aisle',
           product: 'product',
           bin: 'bin',
         }[entity]
@@ -235,6 +241,8 @@ export function createForms({
             order: 'orders',
             supplier: 'suppliers',
             warehouse: 'warehouses',
+            zone: 'zones',
+            aisle: 'aisles',
             product: 'products',
             bin: 'bins',
           }[entity]
@@ -257,7 +265,26 @@ export function createForms({
           'confirmId',
           input('confirmId', 'text', 'autocomplete="off"'),
         );
-    } else if (['staff', 'customer', 'supplier'].includes(type)) {
+    } else if (type === 'staff') {
+      const phones = record?.phones || [];
+      html = `<div class="form-grid">${field('Staff ID', 'id', input('id', 'text', 'maxlength="40"'))}${field('Name', 'name', input('name', 'text', 'maxlength="120"'))}${field(
+        'Warehouse',
+        'warehouseId',
+        select(
+          'warehouseId',
+          ctx.state.warehouses,
+          (w) => w.id + ' · ' + w.name,
+        ),
+      )}${field(
+        'Supervisor',
+        'supervisorId',
+        `<select name="supervisorId"><option value="">No supervisor</option>${ui.options(
+          ctx.state.staff.filter((p) => p.id !== id),
+          (p) => p.id + ' · ' + p.name,
+          record?.supervisorId || '',
+        )}</select>`,
+      )}${field('Address', 'address', '<input name="address" maxlength="250">', true)}</div><section class="staff-phones"><h3>Phone numbers</h3><p class="muted">Optional. Each number is stored separately.</p><div id="staff-phone-list">${(phones.length ? phones : ['']).map(phoneForm).join('')}</div><button type="button" class="button secondary" id="add-staff-phone">Add phone number</button></section>`;
+    } else if (['customer', 'supplier'].includes(type)) {
       html =
         '<div class="form-grid">' +
         field(
@@ -284,7 +311,7 @@ export function createForms({
         field(
           'Phone',
           'phone',
-          '<input name="phone" type="tel" maxlength="30" value="' +
+          '<input name="phone" type="tel" maxlength="20" value="' +
             esc(record?.phone || '') +
             '">',
         ) +
@@ -313,7 +340,7 @@ export function createForms({
           true,
         ) +
         '</div>';
-    } else if (type === 'bin') {
+    } else if (['zone', 'aisle', 'bin'].includes(type)) {
       html =
         '<div class="form-grid">' +
         field(
@@ -325,15 +352,35 @@ export function createForms({
             (w) => w.id + ' · ' + w.name,
           ),
         ) +
-        field('Zone', 'zone', input('zone', 'text', 'maxlength="40"')) +
-        field('Aisle', 'aisle', input('aisle', 'text', 'maxlength="40"')) +
+        (type === 'zone'
+          ? field(
+              'Zone ID',
+              'zoneId',
+              input('zoneId', 'text', 'maxlength="40"'),
+            )
+          : field('Zone', 'zone', '<select name="zone" required></select>')) +
+        (type === 'aisle'
+          ? field(
+              'Aisle ID',
+              'aisleId',
+              input('aisleId', 'text', 'maxlength="40"'),
+            )
+          : type === 'bin'
+            ? field('Aisle', 'aisle', '<select name="aisle" required></select>')
+            : '') +
+        (type === 'bin'
+          ? field(
+              'Position',
+              'position',
+              input('position', 'text', 'maxlength="40"'),
+            )
+          : '') +
         field(
-          'Position',
-          'position',
-          input('position', 'text', 'maxlength="40"'),
+          type === 'bin' ? 'Bin name' : 'Name',
+          'name',
+          `<input name="name" maxlength="120" ${type === 'bin' ? '' : 'required'}>`,
         ) +
-        field('Bin name', 'name', '<input name="name" maxlength="120">') +
-        '</div><p class="info-note">A bin is uniquely identified by its warehouse, zone, aisle and position.</p>';
+        `</div><p class="info-note">${type === 'zone' ? 'Zone IDs are unique within a warehouse.' : type === 'aisle' ? 'Aisle IDs are unique within a warehouse and zone.' : 'A bin is uniquely identified by its warehouse, zone, aisle and position.'}</p>`;
     } else if (type === 'order') {
       html =
         '<div class="form-grid">' +
@@ -419,15 +466,15 @@ export function createForms({
         select('staffId', ctx.state.staff, (s) => s.name),
       )}</div><p class="stock-hint movement-hint" aria-live="polite"></p><p class="info-note">Source and destination quantities are updated together.</p>`;
     else if (type === 'product')
-      html = `<div class="form-grid">${field('Product ID', 'id', input('id', 'text', 'maxlength="40" placeholder="P-001"'))}${field('Product name', 'name', input('name', 'text', 'maxlength="120"'))}${field('Unit', 'unit', input('unit', 'text', 'maxlength="20" placeholder="Box, bottle, kg…"'))}${field(
+      html = `<div class="form-grid">${field('Product ID', 'id', input('id', 'text', 'maxlength="10" placeholder="P-001"'))}${field('Product name', 'name', input('name', 'text', 'maxlength="100"'))}${field('Unit', 'unit', input('unit', 'text', 'maxlength="20" placeholder="Box, bottle, kg…"'))}${field(
         'Storage requirement',
         'storage',
-        input(
+        select(
           'storage',
-          'text',
-          'maxlength="120" placeholder="Ambient, cold, dry…"',
+          storageRequirements.map((id) => ({ id })),
+          (p) => p.id,
         ),
-      )}${field('Reorder level', 'reorderLevel', input('reorderLevel', 'number', 'min="0" step="0.001" value="0"'))}</div>`;
+      )}${field('Reorder level', 'reorderLevel', input('reorderLevel', 'number', 'min="1" max="2147483647" step="1" value="1"'))}</div>`;
     else
       html = `<div class="form-grid">${field('Task name', 'name', input('name', 'text', 'maxlength="120"'), true)}${field(
         'Staff',
@@ -435,22 +482,27 @@ export function createForms({
         select('staffId', ctx.state.staff, (s) => s.name),
       )}</div>`;
     $('#form-fields').innerHTML = html;
+    if (['zone', 'aisle', 'bin'].includes(type) && !deleting)
+      syncLocation(record);
     if (record && !deleting) {
       $$('input,select', $('#form-fields')).forEach((control) => {
-        if (Object.hasOwn(record, control.name))
+        if (control.name !== 'phones' && Object.hasOwn(record, control.name))
           control.value = record[control.name];
         if (
           control.name === 'id' ||
-          (type === 'bin' &&
-            ['zone', 'aisle', 'position'].includes(control.name))
+          (['zone', 'aisle', 'bin'].includes(type) &&
+            ['zoneId', 'aisleId', 'position'].includes(control.name))
         )
           control.readOnly = true;
-        if (type === 'bin' && control.name === 'warehouseId')
-          control.innerHTML = ui.options(
-            [selectors.warehouse(record.warehouseId)],
-            (w) => w.id + ' · ' + w.name,
-            record.warehouseId,
+        if (
+          ['zone', 'aisle', 'bin'].includes(type) &&
+          ['warehouseId', 'zone', 'aisle'].includes(control.name)
+        ) {
+          const option = [...control.options].find(
+            (o) => o.value === record[control.name],
           );
+          if (option) control.innerHTML = option.outerHTML;
+        }
       });
     }
     $$('.line-row').forEach(syncLine);
@@ -488,6 +540,19 @@ export function createForms({
           : value.trim(),
       ]),
     );
+    if (ctx.operation === 'staff') {
+      result.phones = $$('[name="phones"]', form)
+        .map((el) => el.value.trim())
+        .filter(Boolean);
+      delete result.phone;
+    }
+    if (ctx.operation === 'zone')
+      result.id =
+        ctx.editingId || locationKey(result.warehouseId, result.zoneId);
+    if (ctx.operation === 'aisle')
+      result.id =
+        ctx.editingId ||
+        locationKey(result.warehouseId, result.zone, result.aisleId);
     if (ctx.operation === 'bin')
       result.id =
         ctx.editingId ||
@@ -495,6 +560,42 @@ export function createForms({
           '|',
         );
     return result;
+  }
+
+  function phoneForm(value = '') {
+    return `<div class="phone-row">${field('Phone number', 'phones', `<input name="phones" type="tel" maxlength="20" value="${esc(value)}">`)}<button type="button" class="button quiet danger remove-staff-phone" aria-label="Remove phone number">Remove</button></div>`;
+  }
+
+  function syncLocation(record = null) {
+    const root = $('#form-fields'),
+      warehouse = $('[name="warehouseId"]', root);
+    if (record) warehouse.value = record.warehouseId;
+    const zone = $('[name="zone"]', root),
+      aisle = $('[name="aisle"]', root);
+    if (zone) {
+      const chosen = record?.zone ?? zone.value;
+      zone.innerHTML =
+        ui.options(
+          ctx.state.zones
+            .filter((z) => z.warehouseId === warehouse.value)
+            .map((z) => ({ id: z.zoneId, name: z.name })),
+          (z) => z.id + ' · ' + z.name,
+          chosen,
+        ) || '<option value="">No zones in this warehouse</option>';
+    }
+    if (aisle) {
+      const chosen = record?.aisle ?? aisle.value;
+      aisle.innerHTML =
+        ui.options(
+          ctx.state.aisles
+            .filter(
+              (a) => a.warehouseId === warehouse.value && a.zone === zone.value,
+            )
+            .map((a) => ({ id: a.aisleId, name: a.name })),
+          (a) => a.id + ' · ' + a.name,
+          chosen,
+        ) || '<option value="">No aisles in this zone</option>';
+    }
   }
 
   function setSaving(value) {
@@ -549,5 +650,7 @@ export function createForms({
     collectPayload,
     setSaving,
     showFormError,
+    phoneForm,
+    syncLocation,
   };
 }
