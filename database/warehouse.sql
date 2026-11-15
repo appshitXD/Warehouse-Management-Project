@@ -102,7 +102,7 @@ CREATE TABLE STAFF (
   Staff_ID      VARCHAR(10)  NOT NULL,
   Staff_Name    VARCHAR(100) NOT NULL,
   Staff_Address VARCHAR(150) NOT NULL,
-  Warehouse_ID  VARCHAR(10)  NOT NULL,
+  Warehouse_ID  VARCHAR(10)  NULL,
   Supervisor_ID VARCHAR(10)  NULL,
   PRIMARY KEY (Staff_ID),
 CONSTRAINT CHK_STAFF_SUPERVISOR CHECK (Supervisor_ID <> Staff_ID),
