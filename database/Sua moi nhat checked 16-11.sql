@@ -1,0 +1,1116 @@
+-- ============================================================
+-- WarehouseManagement DROP + CREATE + INSERT
+-- ============================================================
+-- Constraints & business rules for 10 business tables (Report.docx):
+--   CUSTOMER_ORDER, TASK, GOODS_RECEIPT, GOODS_RECEIPT_LINE, GOODS_ISSUE,
+--   GOODS_ISSUE_LINE, STOCK_COUNT, COUNT_LINE, STOCK_HISTORY, STOCK_MOVEMENT
+--   Status/State columns VARCHAR(50), CHECK, UNIQUE, ON DELETE / ON UPDATE.
+--   Needs MySQL 8.0.16+ (older versions parse CHECK but do not enforce it).
+-- ============================================================
+CREATE DATABASE IF NOT EXISTS WarehouseManagement;
+USE WarehouseManagement;
+
+-- ===== 1. DROP TABLE IF EXISTS =====
+SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS COUNT_LINE;
+DROP TABLE IF EXISTS PRODUCT_BIN;
+DROP TABLE IF EXISTS STOCK_COUNT;
+DROP TABLE IF EXISTS STOCK_MOVEMENT;
+DROP TABLE IF EXISTS STOCK_HISTORY;
+DROP TABLE IF EXISTS GOODS_ISSUE_LINE;
+DROP TABLE IF EXISTS GOODS_ISSUE;
+DROP TABLE IF EXISTS GOODS_RECEIPT_LINE;
+DROP TABLE IF EXISTS GOODS_RECEIPT;
+DROP TABLE IF EXISTS TASK;
+DROP TABLE IF EXISTS CUSTOMER_ORDER;
+DROP TABLE IF EXISTS PRODUCT;
+DROP TABLE IF EXISTS STAFF_PHONE;
+DROP TABLE IF EXISTS STAFF;
+DROP TABLE IF EXISTS CUSTOMER;
+DROP TABLE IF EXISTS SUPPLIER;
+DROP TABLE IF EXISTS BIN;
+DROP TABLE IF EXISTS AISLE;
+DROP TABLE IF EXISTS ZONE;
+DROP TABLE IF EXISTS WAREHOUSE;
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ===== 2. CREATE TABLE  =====
+-- WAREHOUSE
+CREATE TABLE WAREHOUSE (
+  Warehouse_ID   VARCHAR(10)  NOT NULL,
+  Address        VARCHAR(255) NOT NULL,
+  Warehouse_Name VARCHAR(100) NOT NULL,
+  PRIMARY KEY (Warehouse_ID),
+  CONSTRAINT UQ_WAREHOUSE_NAME UNIQUE (Warehouse_Name)
+);
+
+-- ZONE
+CREATE TABLE ZONE (
+  Zone_ID      VARCHAR(10)  NOT NULL,
+  Warehouse_ID VARCHAR(10)  NOT NULL,
+  Zone_Name    VARCHAR(100) NOT NULL,
+  PRIMARY KEY (Zone_ID, Warehouse_ID),
+  CONSTRAINT FK_ZONE_WAREHOUSE FOREIGN KEY (Warehouse_ID) REFERENCES WAREHOUSE (Warehouse_ID)
+    ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- AISLE
+CREATE TABLE AISLE (
+  Aisle_ID     VARCHAR(10)  NOT NULL,
+  Aisle_Name   VARCHAR(100)  NOT NULL,
+  Zone_ID      VARCHAR(10)  NOT NULL,
+  Warehouse_ID VARCHAR(10)  NOT NULL,
+  PRIMARY KEY (Aisle_ID, Zone_ID, Warehouse_ID),
+  CONSTRAINT FK_AISLE_ZONE FOREIGN KEY (Zone_ID, Warehouse_ID) REFERENCES ZONE (Zone_ID, Warehouse_ID)
+ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- BIN
+CREATE TABLE BIN (
+  `Position`   VARCHAR(10)  NOT NULL,
+  Aisle_ID     VARCHAR(10)  NOT NULL,
+  Name         VARCHAR(50)  NOT NULL,
+  Zone_ID      VARCHAR(10)  NOT NULL,
+  Warehouse_ID VARCHAR(10)  NOT NULL,
+  PRIMARY KEY (`Position`, Aisle_ID, Zone_ID, Warehouse_ID),
+CONSTRAINT FK_BIN_AISLE FOREIGN KEY (Aisle_ID, Zone_ID, Warehouse_ID) REFERENCES AISLE (Aisle_ID, Zone_ID, Warehouse_ID)
+ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- SUPPLIER
+CREATE TABLE SUPPLIER (
+  Supplier_ID      VARCHAR(10)  NOT NULL,
+  Supplier_Address VARCHAR(100) NOT NULL,
+  Supplier_Name    VARCHAR(100) NOT NULL,
+  Supplier_Phone   VARCHAR(20)  NOT NULL,
+  PRIMARY KEY (Supplier_ID),
+  CONSTRAINT UQ_SUPPLIER_PHONE UNIQUE (Supplier_Phone)
+);
+
+-- CUSTOMER
+CREATE TABLE CUSTOMER (
+  Customer_ID VARCHAR(10)  NOT NULL,
+  Name        VARCHAR(100) NOT NULL,
+  Address     VARCHAR(100) NOT NULL,
+  Phone       VARCHAR(20)  NOT NULL,
+  PRIMARY KEY (Customer_ID),
+  CONSTRAINT UQ_CUSTOMER_PHONE UNIQUE (Phone)
+);
+
+-- STAFF
+CREATE TABLE STAFF (
+  Staff_ID      VARCHAR(10)  NOT NULL,
+  Staff_Name    VARCHAR(100) NOT NULL,
+  Staff_Address VARCHAR(150) NOT NULL,
+  Warehouse_ID  VARCHAR(10)  NOT NULL,
+  Supervisor_ID VARCHAR(10)  NULL,
+  PRIMARY KEY (Staff_ID),
+CONSTRAINT CHK_STAFF_SUPERVISOR CHECK (Supervisor_ID <> Staff_ID),
+CONSTRAINT FK_STAFF_SUPERVISOR FOREIGN KEY (Supervisor_ID) REFERENCES STAFF (Staff_ID)
+ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT FK_STAFF_WAREHOUSE  FOREIGN KEY (Warehouse_ID)  REFERENCES WAREHOUSE (Warehouse_ID)
+ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- STAFF_PHONE
+CREATE TABLE STAFF_PHONE (
+  Staff_ID VARCHAR(10) NOT NULL,
+  Phone    VARCHAR(20) NOT NULL,
+  PRIMARY KEY (Staff_ID, Phone),
+CONSTRAINT FK_STAFF_PHONE_STAFF FOREIGN KEY (Staff_ID) REFERENCES STAFF (Staff_ID)
+    ON DELETE CASCADE ON UPDATE CASCADE
+    );
+
+-- PRODUCT
+CREATE TABLE PRODUCT (
+  Product_ID          VARCHAR(10)  NOT NULL,
+  Unit                VARCHAR(20)  NOT NULL,
+  Storage_Requirement VARCHAR(20)  NOT NULL,
+  Reorder_Level       INT          NOT NULL,
+  Product_Name        VARCHAR(100) NOT NULL,
+  PRIMARY KEY (Product_ID),
+CONSTRAINT CHK_PRODUCT_STORAGE
+    CHECK (Storage_Requirement IN ('Ambient', 'Cold', 'Hazardous', 'Dry Ambient')),
+  CONSTRAINT CHK_PRODUCT_REORDER
+    CHECK (Reorder_Level > 0)
+    );
+
+-- CUSTOMER_ORDER
+CREATE TABLE CUSTOMER_ORDER (
+  Order_ID    VARCHAR(10) NOT NULL,
+  `Time`      DATETIME    NOT NULL,
+  Status      VARCHAR(50) NOT NULL,
+  Customer_ID VARCHAR(10) NOT NULL,
+  PRIMARY KEY (Order_ID),
+  CONSTRAINT CHK_ORDER_STATUS
+    CHECK (Status IN ('Pending', 'Shipped', 'Delivered', 'Cancelled')),
+  CONSTRAINT FK_ORDER_CUSTOMER FOREIGN KEY (Customer_ID) REFERENCES CUSTOMER (Customer_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- TASK
+CREATE TABLE TASK (
+  Task_ID     VARCHAR(10)  NOT NULL,
+  Task_Status VARCHAR(50)  NOT NULL,
+  Task_Name   VARCHAR(100) NOT NULL,
+  Staff_ID    VARCHAR(10)  NOT NULL,
+  PRIMARY KEY (Task_ID),
+  CONSTRAINT CHK_TASK_STATUS
+    CHECK (Task_Status IN ('Pending', 'In Progress', 'Completed')),
+  CONSTRAINT FK_TASK_STAFF FOREIGN KEY (Staff_ID) REFERENCES STAFF (Staff_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- GOODS_RECEIPT
+CREATE TABLE GOODS_RECEIPT (
+  Receipt_ID   VARCHAR(10) NOT NULL,
+  Receipt_Date DATE        NOT NULL,
+  Supplier_ID  VARCHAR(10) NOT NULL,
+  PRIMARY KEY (Receipt_ID),
+  CONSTRAINT FK_RECEIPT_SUPPLIER FOREIGN KEY (Supplier_ID) REFERENCES SUPPLIER (Supplier_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- GOODS_RECEIPT_LINE
+CREATE TABLE GOODS_RECEIPT_LINE (
+  Quantity     INT         NOT NULL,
+  Line_Num     INT         NOT NULL,
+  `Position`   VARCHAR(10) NOT NULL,
+  Receipt_ID   VARCHAR(10) NOT NULL,
+  Product_ID   VARCHAR(10) NOT NULL,
+  Aisle_ID     VARCHAR(10) NOT NULL,
+  Zone_ID      VARCHAR(10) NOT NULL,
+  Warehouse_ID VARCHAR(10) NOT NULL,
+  PRIMARY KEY (Receipt_ID, Line_Num),
+  CONSTRAINT CHK_GRL_QTY CHECK (Quantity > 0),
+  CONSTRAINT FK_GRL_RECEIPT FOREIGN KEY (Receipt_ID) REFERENCES GOODS_RECEIPT (Receipt_ID)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT FK_GRL_PRODUCT FOREIGN KEY (Product_ID) REFERENCES PRODUCT (Product_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT FK_GRL_BIN
+    FOREIGN KEY (Position, Aisle_ID, Zone_ID, Warehouse_ID)
+    REFERENCES BIN (`Position`, Aisle_ID, Zone_ID, Warehouse_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- GOODS_ISSUE
+CREATE TABLE GOODS_ISSUE (
+  Issue_ID      VARCHAR(10) NOT NULL,
+  Issue_Date    DATE        NOT NULL,
+  State_Of_Good VARCHAR(50) NOT NULL,
+  Status        VARCHAR(50) NOT NULL,
+  Order_ID      VARCHAR(10) NOT NULL,
+  PRIMARY KEY (Issue_ID),
+  CONSTRAINT CHK_GI_STATUS
+    CHECK (Status IN ('Pending', 'Shipped', 'Completed')),
+  CONSTRAINT FK_ISSUE_ORDER FOREIGN KEY (Order_ID) REFERENCES CUSTOMER_ORDER (Order_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- GOODS_ISSUE_LINE
+CREATE TABLE GOODS_ISSUE_LINE (
+  Issue_Line_ID INT         NOT NULL,
+  Issue_ID      VARCHAR(10) NOT NULL,
+  Quantity      INT         NOT NULL,
+  Product_ID    VARCHAR(10) NOT NULL,
+  `Position`    VARCHAR(10) NOT NULL,
+  Aisle_ID      VARCHAR(10) NOT NULL,
+  Zone_ID       VARCHAR(10) NOT NULL,
+  Warehouse_ID  VARCHAR(10) NOT NULL,
+  PRIMARY KEY (Issue_ID, Issue_Line_ID),
+  CONSTRAINT CHK_GIL_QTY CHECK (Quantity > 0),
+  CONSTRAINT FK_GIL_ISSUE   FOREIGN KEY (Issue_ID)   REFERENCES GOODS_ISSUE (Issue_ID)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT FK_GIL_PRODUCT FOREIGN KEY (Product_ID) REFERENCES PRODUCT (Product_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT FK_GIL_BIN
+    FOREIGN KEY (Position, Aisle_ID, Zone_ID, Warehouse_ID)
+    REFERENCES BIN (`Position`, Aisle_ID, Zone_ID, Warehouse_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- STOCK_HISTORY
+CREATE TABLE STOCK_HISTORY (
+  Record_ID    VARCHAR(10) NOT NULL,
+  Record_Date  DATE        NOT NULL,
+  Quantity     INT         NOT NULL,
+  Product_ID   VARCHAR(10) NOT NULL,
+  `Position`   VARCHAR(10) NOT NULL,
+  Aisle_ID     VARCHAR(10) NOT NULL,
+  Zone_ID      VARCHAR(10) NOT NULL,
+  Warehouse_ID VARCHAR(10) NOT NULL,
+  PRIMARY KEY (Record_ID),
+  CONSTRAINT UQ_SH_DATE_PRODUCT_BIN
+    UNIQUE (Record_Date, Product_ID, Warehouse_ID, Zone_ID, Aisle_ID, `Position`),
+  CONSTRAINT CHK_SH_QTY CHECK (Quantity >= 0),
+  CONSTRAINT FK_SH_PRODUCT FOREIGN KEY (Product_ID) REFERENCES PRODUCT (Product_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT FK_SH_BIN
+    FOREIGN KEY (Position, Aisle_ID, Zone_ID, Warehouse_ID)
+    REFERENCES BIN (`Position`, Aisle_ID, Zone_ID, Warehouse_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- STOCK_MOVEMENT
+CREATE TABLE STOCK_MOVEMENT (
+  Movement_ID        VARCHAR(10) NOT NULL,
+  Quantity           INT         NOT NULL,
+  Movement_Date      DATETIME    NOT NULL,
+  Staff_ID           VARCHAR(10) NOT NULL,
+  Product_ID         VARCHAR(10) NOT NULL,
+  From_Position      VARCHAR(10) NOT NULL,
+  From_Aisle_ID      VARCHAR(10) NOT NULL,
+  From_Zone_ID       VARCHAR(10) NOT NULL,
+  From_Warehouse_ID  VARCHAR(10) NOT NULL,
+  To_Position        VARCHAR(10) NOT NULL,
+  To_Aisle_ID        VARCHAR(10) NOT NULL,
+  To_Zone_ID         VARCHAR(10) NOT NULL,
+  To_Warehouse_ID    VARCHAR(10) NOT NULL,
+  PRIMARY KEY (Movement_ID),
+  CONSTRAINT CHK_SM_QTY CHECK (Quantity > 0),
+  CONSTRAINT CHK_SM_BIN_DIFF CHECK (
+    From_Position <> To_Position
+    OR From_Aisle_ID <> To_Aisle_ID
+    OR From_Zone_ID <> To_Zone_ID
+    OR From_Warehouse_ID <> To_Warehouse_ID),
+  CONSTRAINT FK_SM_STAFF   FOREIGN KEY (Staff_ID)   REFERENCES STAFF (Staff_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT FK_SM_PRODUCT FOREIGN KEY (Product_ID) REFERENCES PRODUCT (Product_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT FK_SM_FROM_BIN
+    FOREIGN KEY (From_Position, From_Aisle_ID, From_Zone_ID, From_Warehouse_ID)
+    REFERENCES BIN (`Position`, Aisle_ID, Zone_ID, Warehouse_ID)
+    ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT FK_SM_TO_BIN
+    FOREIGN KEY (To_Position, To_Aisle_ID, To_Zone_ID, To_Warehouse_ID)
+    REFERENCES BIN (`Position`, Aisle_ID, Zone_ID, Warehouse_ID)
+    ON DELETE RESTRICT ON UPDATE RESTRICT
+);
+
+-- STOCK_COUNT
+CREATE TABLE STOCK_COUNT (
+  Count_ID     VARCHAR(10) NOT NULL,
+  Count_Date   DATETIME    NOT NULL,
+  Count_Status VARCHAR(50) NOT NULL,
+  PRIMARY KEY (Count_ID),
+  CONSTRAINT CHK_SC_STATUS
+    CHECK (Count_Status IN ('Pending', 'In Progress', 'Completed'))
+);
+
+-- PRODUCT_BIN
+CREATE TABLE PRODUCT_BIN (
+  Product_ID   VARCHAR(10) NOT NULL,
+  `Position`   VARCHAR(10) NOT NULL,
+  Aisle_ID     VARCHAR(10) NOT NULL,
+  Zone_ID      VARCHAR(10) NOT NULL,
+  Warehouse_ID VARCHAR(10) NOT NULL,
+  Quantity     INT         NOT NULL,
+  PRIMARY KEY (Product_ID, `Position`, Aisle_ID, Zone_ID, Warehouse_ID),
+  CONSTRAINT CHK_PB_QTY CHECK (Quantity >= 0),
+  CONSTRAINT FK_PB_PRODUCT FOREIGN KEY (Product_ID) REFERENCES PRODUCT (Product_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT FK_PB_BIN
+    FOREIGN KEY (Position, Aisle_ID, Zone_ID, Warehouse_ID)
+    REFERENCES BIN (`Position`, Aisle_ID, Zone_ID, Warehouse_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- COUNT_LINE
+CREATE TABLE COUNT_LINE (
+  Line_No           INT         NOT NULL,
+  Count_ID          VARCHAR(10) NOT NULL,
+  Quantity_Counted  INT         NOT NULL,
+  Recorded_Quantity INT         NOT NULL,
+  Product_ID        VARCHAR(10) NOT NULL,
+  `Position`        VARCHAR(10) NOT NULL,
+  Aisle_ID          VARCHAR(10) NOT NULL,
+  Zone_ID           VARCHAR(10) NOT NULL,
+  Warehouse_ID      VARCHAR(10) NOT NULL,
+  PRIMARY KEY (Count_ID, Line_No),
+  CONSTRAINT UQ_CL_COUNT_PRODUCT_BIN
+    UNIQUE (Count_ID, Product_ID, Warehouse_ID, Zone_ID, Aisle_ID, `Position`),
+  CONSTRAINT CHK_CL_QTY_COUNTED  CHECK (Quantity_Counted >= 0),
+  CONSTRAINT CHK_CL_QTY_RECORDED CHECK (Recorded_Quantity >= 0),
+  CONSTRAINT FK_CL_COUNT   FOREIGN KEY (Count_ID)   REFERENCES STOCK_COUNT (Count_ID)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT FK_CL_PRODUCT FOREIGN KEY (Product_ID) REFERENCES PRODUCT (Product_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT FK_CL_BIN
+    FOREIGN KEY (Position, Aisle_ID, Zone_ID, Warehouse_ID)
+    REFERENCES BIN (`Position`, Aisle_ID, Zone_ID, Warehouse_ID)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- ===== 3. INSERT DATA =====
+-- WAREHOUSE
+INSERT INTO WAREHOUSE VALUES ('W01', '123 Main St NY', 'NY Central Hub');
+INSERT INTO WAREHOUSE VALUES ('W02', '456 Elm St LA', 'LA West Hub');
+INSERT INTO WAREHOUSE VALUES ('W03', '789 Oak St TX', 'TX South Hub');
+INSERT INTO WAREHOUSE VALUES ('W04', '210 Lake Shore Dr IL', 'Chicago Midwest Depot');
+INSERT INTO WAREHOUSE VALUES ('W05', '500 Biscayne Blvd FL', 'Miami South Hub');
+INSERT INTO WAREHOUSE VALUES ('W06', '888 Desert Ridge AZ', 'Phoenix Southwest Depot');
+INSERT INTO WAREHOUSE VALUES ('W07', '1200 Pike St WA', 'Seattle Northwest Hub');
+INSERT INTO WAREHOUSE VALUES ('W08', '350 Colorado Blvd CO', 'Denver Mountain Depot');
+INSERT INTO WAREHOUSE VALUES ('W09', '777 Peachtree St GA', 'Atlanta Southeast Hub');
+INSERT INTO WAREHOUSE VALUES ('W10', '404 Boston Post Rd MA', 'Boston Northeast Depot');
+INSERT INTO WAREHOUSE VALUES ('W11', '909 Nicollet Mall MN', 'Minneapolis Central Depot');
+INSERT INTO WAREHOUSE VALUES ('W12', '650 Canal St LA', 'New Orleans Gulf Hub');
+INSERT INTO WAREHOUSE VALUES ('W13', '101 Las Vegas Blvd NV', 'Las Vegas West Depot');
+INSERT INTO WAREHOUSE VALUES ('W14', '250 Inner Harbor MD', 'Baltimore Mid-Atlantic Depot');
+INSERT INTO WAREHOUSE VALUES ('W15', '800 South Tryon St NC', 'Charlotte Southeast Depot');
+-- ZONE
+INSERT INTO ZONE VALUES ('Z01', 'W01', 'NY Ambient Zone A');
+INSERT INTO ZONE VALUES ('Z02', 'W01', 'NY Cold Zone');
+INSERT INTO ZONE VALUES ('Z03', 'W01', 'NY Ambient Zone B');
+INSERT INTO ZONE VALUES ('Z01', 'W02', 'LA Hazardous Zone');
+INSERT INTO ZONE VALUES ('Z02', 'W02', 'LA Ambient Zone');
+INSERT INTO ZONE VALUES ('Z03', 'W02', 'LA Cold Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W03', 'TX Ambient Zone A');
+INSERT INTO ZONE VALUES ('Z02', 'W03', 'TX Ambient Zone B');
+INSERT INTO ZONE VALUES ('Z03', 'W03', 'TX Hazardous Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W04', 'Chicago Ambient Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W05', 'Miami Cold Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W06', 'Phoenix Hazardous Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W07', 'Seattle Ambient Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W08', 'Denver Cold Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W09', 'Atlanta Ambient Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W10', 'Boston Hazardous Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W11', 'Minneapolis Cold Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W12', 'New Orleans Ambient Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W13', 'Las Vegas Ambient Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W14', 'Baltimore Hazardous Zone');
+INSERT INTO ZONE VALUES ('Z01', 'W15', 'Charlotte Ambient Zone');
+-- AISLE
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W01');
+INSERT INTO AISLE VALUES ('A02', 'Aisle 2', 'Z01', 'W01');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z02', 'W01');
+INSERT INTO AISLE VALUES ('A02', 'Aisle 2', 'Z02', 'W01');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z03', 'W01');
+INSERT INTO AISLE VALUES ('A02', 'Aisle 2', 'Z03', 'W01');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W02');
+INSERT INTO AISLE VALUES ('A02', 'Aisle 2', 'Z01', 'W02');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z02', 'W02');
+INSERT INTO AISLE VALUES ('A02', 'Aisle 2', 'Z02', 'W02');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z03', 'W02');
+INSERT INTO AISLE VALUES ('A02', 'Aisle 2', 'Z03', 'W02');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W03');
+INSERT INTO AISLE VALUES ('A02', 'Aisle 2', 'Z01', 'W03');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z02', 'W03');
+INSERT INTO AISLE VALUES ('A02', 'Aisle 2', 'Z02', 'W03');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z03', 'W03');
+INSERT INTO AISLE VALUES ('A02', 'Aisle 2', 'Z03', 'W03');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W04');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W05');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W06');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W07');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W08');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W09');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W10');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W11');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W12');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W13');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W14');
+INSERT INTO AISLE VALUES ('A01', 'Aisle 1', 'Z01', 'W15');
+-- BIN
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B002', 'A01', 'Bin A1-2', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B003', 'A01', 'Bin A1-3', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B004', 'A01', 'Bin A1-4', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B005', 'A01', 'Bin A1-5', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B006', 'A02', 'Bin A2-1', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B007', 'A02', 'Bin A2-2', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B008', 'A02', 'Bin A2-3', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B009', 'A02', 'Bin A2-4', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B010', 'A02', 'Bin A2-5', 'Z01', 'W01');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B002', 'A01', 'Bin A1-2', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B003', 'A01', 'Bin A1-3', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B004', 'A01', 'Bin A1-4', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B005', 'A01', 'Bin A1-5', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B006', 'A02', 'Bin A2-1', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B007', 'A02', 'Bin A2-2', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B008', 'A02', 'Bin A2-3', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B009', 'A02', 'Bin A2-4', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B010', 'A02', 'Bin A2-5', 'Z02', 'W01');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B002', 'A01', 'Bin A1-2', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B003', 'A01', 'Bin A1-3', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B004', 'A01', 'Bin A1-4', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B005', 'A01', 'Bin A1-5', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B006', 'A02', 'Bin A2-1', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B007', 'A02', 'Bin A2-2', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B008', 'A02', 'Bin A2-3', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B009', 'A02', 'Bin A2-4', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B010', 'A02', 'Bin A2-5', 'Z03', 'W01');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B002', 'A01', 'Bin A1-2', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B003', 'A01', 'Bin A1-3', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B004', 'A01', 'Bin A1-4', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B005', 'A01', 'Bin A1-5', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B006', 'A02', 'Bin A2-1', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B007', 'A02', 'Bin A2-2', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B008', 'A02', 'Bin A2-3', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B009', 'A02', 'Bin A2-4', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B010', 'A02', 'Bin A2-5', 'Z01', 'W02');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B002', 'A01', 'Bin A1-2', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B003', 'A01', 'Bin A1-3', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B004', 'A01', 'Bin A1-4', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B005', 'A01', 'Bin A1-5', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B006', 'A02', 'Bin A2-1', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B007', 'A02', 'Bin A2-2', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B008', 'A02', 'Bin A2-3', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B009', 'A02', 'Bin A2-4', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B010', 'A02', 'Bin A2-5', 'Z02', 'W02');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B002', 'A01', 'Bin A1-2', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B003', 'A01', 'Bin A1-3', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B004', 'A01', 'Bin A1-4', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B005', 'A01', 'Bin A1-5', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B006', 'A02', 'Bin A2-1', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B007', 'A02', 'Bin A2-2', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B008', 'A02', 'Bin A2-3', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B009', 'A02', 'Bin A2-4', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B010', 'A02', 'Bin A2-5', 'Z03', 'W02');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B002', 'A01', 'Bin A1-2', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B003', 'A01', 'Bin A1-3', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B004', 'A01', 'Bin A1-4', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B005', 'A01', 'Bin A1-5', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B006', 'A02', 'Bin A2-1', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B007', 'A02', 'Bin A2-2', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B008', 'A02', 'Bin A2-3', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B009', 'A02', 'Bin A2-4', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B010', 'A02', 'Bin A2-5', 'Z01', 'W03');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B002', 'A01', 'Bin A1-2', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B003', 'A01', 'Bin A1-3', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B004', 'A01', 'Bin A1-4', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B005', 'A01', 'Bin A1-5', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B006', 'A02', 'Bin A2-1', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B007', 'A02', 'Bin A2-2', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B008', 'A02', 'Bin A2-3', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B009', 'A02', 'Bin A2-4', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B010', 'A02', 'Bin A2-5', 'Z02', 'W03');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B002', 'A01', 'Bin A1-2', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B003', 'A01', 'Bin A1-3', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B004', 'A01', 'Bin A1-4', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B005', 'A01', 'Bin A1-5', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B006', 'A02', 'Bin A2-1', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B007', 'A02', 'Bin A2-2', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B008', 'A02', 'Bin A2-3', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B009', 'A02', 'Bin A2-4', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B010', 'A02', 'Bin A2-5', 'Z03', 'W03');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W04');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W05');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W06');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W07');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W08');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W09');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W10');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W11');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W12');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W13');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W14');
+INSERT INTO BIN VALUES ('B001', 'A01', 'Bin A1-1', 'Z01', 'W15');
+-- SUPPLIER
+INSERT INTO SUPPLIER VALUES ('S01', '111 Tech Blvd', 'Tech Supplies Inc', '555-0101');
+INSERT INTO SUPPLIER VALUES ('S02', '222 Food Ave', 'Fresh Foods Co', '555-0102');
+INSERT INTO SUPPLIER VALUES ('S03', '333 Paper St', 'Office Goods LLC', '555-0103');
+INSERT INTO SUPPLIER VALUES ('S04', '444 Chem Rd', 'SafeChem', '555-0104');
+INSERT INTO SUPPLIER VALUES ('S05', '555 Furn Ln', 'Ergo Furniture', '555-0105');
+INSERT INTO SUPPLIER VALUES ('S06', '666 Tech Blvd', 'ElectricCorp', '555-0106');
+INSERT INTO SUPPLIER VALUES ('S07', '777 Food Ave', 'ColdChain Logistics', '555-0107');
+INSERT INTO SUPPLIER VALUES ('S08', '888 Paper St', 'Stationery Hub', '555-0108');
+INSERT INTO SUPPLIER VALUES ('S09', '999 Chem Rd', 'PowerCells Inc', '555-0109');
+INSERT INTO SUPPLIER VALUES ('S10', '101 Furn Ln', 'DeskMakers', '555-0110');
+INSERT INTO SUPPLIER VALUES ('S11', '202 Tech Blvd', 'PC Parts Direct', '555-0111');
+INSERT INTO SUPPLIER VALUES ('S12', '303 Food Ave', 'Farm to Table', '555-0112');
+INSERT INTO SUPPLIER VALUES ('S13', '404 Paper St', 'PaperWorld', '555-0113');
+INSERT INTO SUPPLIER VALUES ('S14', '505 Chem Rd', 'AutoFluids', '555-0114');
+INSERT INTO SUPPLIER VALUES ('S15', '322 Clicker St', 'ElectroCorp', '555-0115');
+INSERT INTO SUPPLIER VALUES ('S16', '710 Radio Wave Rd, San Diego, CA', 'WaveLink Wireless Devices', '555-0116');
+INSERT INTO SUPPLIER VALUES ('S17', '180 Research Dr, Boston, MA', 'CryoPure Thermal Solutions', '555-0117');
+INSERT INTO SUPPLIER VALUES ('S18', '500 Stockyard Rd, Omaha, NE', 'Prime Angus Beef Meats', '555-0118');
+INSERT INTO SUPPLIER VALUES ('S19', '22 Connectivity Way, Dallas, TX', 'CableMasters International', '555-0119');
+INSERT INTO SUPPLIER VALUES ('S20', '460 Switchboard Ave, Raleigh, NC', 'KeyForce Mechanical Labs', '555-0120');
+INSERT INTO SUPPLIER VALUES ('S21', '78 Paper Mill Rd, Portland, OR', 'Global Ink & Stationery Group', '555-0121');
+INSERT INTO SUPPLIER VALUES ('S22', '315 Pasture Ln, Madison, WI', 'Alpine Dairy & Beverages', '555-0122');
+INSERT INTO SUPPLIER VALUES ('S23', '640 Lithium Way, Reno, NV', 'VoltVolt Energy Tech', '555-0123');
+INSERT INTO SUPPLIER VALUES ('S24', '150 Port Plaza, Long Beach, CA', 'PortFlex Docking Solutions', '555-0124');
+INSERT INTO SUPPLIER VALUES ('S25', '275 Biohazard Loop, Baltimore, MD', 'SafeGuard Sanitizing Corp.', '555-0125');
+INSERT INTO SUPPLIER VALUES ('S26', '88 Thermal Way, Charlotte, NC', 'RollPrint POS Media', '555-0126');
+INSERT INTO SUPPLIER VALUES ('S27', '420 Sugar Hill Rd, Hershey, PA', 'SweetFrost Confectionery', '555-0127');
+INSERT INTO SUPPLIER VALUES ('S28', '900 Pixel Way, Beaverton, OR', 'UltraVision Displays Ltd.', '555-0128');
+INSERT INTO SUPPLIER VALUES ('S29', '512 Clicker St, San Jose, CA', 'Tactile Switch Mechanics', '555-0129');
+INSERT INTO SUPPLIER VALUES ('S30', '118 Powerhouse Rd, Detroit, MI', 'EverCharge Battery Corp.', '555-0130');
+-- CUSTOMER
+INSERT INTO CUSTOMER VALUES ('C01', 'Alice Smith', '333 Apple St', '555-0201');
+INSERT INTO CUSTOMER VALUES ('C02', 'Bob Jones', '444 Banana Ave', '555-0202');
+INSERT INTO CUSTOMER VALUES ('C03', 'Charlie Brown', '555 Cherry Ln', '555-0203');
+INSERT INTO CUSTOMER VALUES ('C04', 'Diana Prince', '666 Date Blvd', '555-0204');
+INSERT INTO CUSTOMER VALUES ('C05', 'Evan Wright', '777 Elder St', '555-0205');
+INSERT INTO CUSTOMER VALUES ('C06', 'Fiona Gallagher', '888 Fig Ave', '555-0206');
+INSERT INTO CUSTOMER VALUES ('C07', 'George Miller', '999 Grape Rd', '555-0207');
+INSERT INTO CUSTOMER VALUES ('C08', 'Hannah Abbott', '101 Hazel Ln', '555-0208');
+INSERT INTO CUSTOMER VALUES ('C09', 'Ian Malcolm', '202 Ivy Blvd', '555-0209');
+INSERT INTO CUSTOMER VALUES ('C10', 'Julia Roberts', '303 Jack St', '555-0210');
+INSERT INTO CUSTOMER VALUES ('C11', 'Kevin Hart', '404 Kiwi Ave', '555-0211');
+INSERT INTO CUSTOMER VALUES ('C12', 'Laura Dern', '505 Lemon Rd', '555-0212');
+INSERT INTO CUSTOMER VALUES ('C13', 'Michael Scott', '606 Mango Ln', '555-0213');
+INSERT INTO CUSTOMER VALUES ('C14', 'Nina Simone', '707 Nut Blvd', '555-0214');
+INSERT INTO CUSTOMER VALUES ('C15', 'Oscar Isaac', '808 Orange St', '555-0215');
+INSERT INTO CUSTOMER VALUES ('C16', 'Michael Oliver', '500 Market St, Philadelphia, PA', '555-0216');
+INSERT INTO CUSTOMER VALUES ('C17', 'Erling Haaland', '1200 Broadway, New York, NY', '555-0217');
+INSERT INTO CUSTOMER VALUES ('C18', 'Kevin Joe', '340 South Congress, Austin, TX', '555-0218');
+INSERT INTO CUSTOMER VALUES ('C19', 'Tom Holland', '77 Battery St, San Francisco, CA', '555-0219');
+INSERT INTO CUSTOMER VALUES ('C20', 'Zendaya', '90 Michigan Ave, Chicago, IL', '555-0220');
+INSERT INTO CUSTOMER VALUES ('C21', 'Lionel Messi', '850 Queens Blvd, Queens, NY', '555-0221');
+INSERT INTO CUSTOMER VALUES ('C22', 'Cristiano Ronaldo', '1040 17th St, Denver, CO', '555-0222');
+INSERT INTO CUSTOMER VALUES ('C23', 'Oscar Bobb', '220 Peachtree St, Atlanta, GA', '555-0223');
+INSERT INTO CUSTOMER VALUES ('C24', 'Steve Rogers', '45 University Way, Seattle, WA', '555-0224');
+INSERT INTO CUSTOMER VALUES ('C25', 'Chris Hemsworth', '1600 Main St, Dallas, TX', '555-0225');
+INSERT INTO CUSTOMER VALUES ('C26', 'Lebron James', '300 Ocean Dr, Miami, FL', '555-0226');
+INSERT INTO CUSTOMER VALUES ('C27', 'Stephen Curry', '600 Hennepin Ave, Minneapolis, MN', '555-0227');
+INSERT INTO CUSTOMER VALUES ('C28', 'Paul Scholes', '88 Wilshire Blvd, Los Angeles, CA', '555-0228');
+INSERT INTO CUSTOMER VALUES ('C29', 'Adam Levine', '410 Canal St, New Orleans, LA', '555-0229');
+INSERT INTO CUSTOMER VALUES ('C30', 'Ariel Smith', '100 Federal St, Boston, MA', '555-0230');
+-- STAFF
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST01', 'John Doe', '123 Main St, Culver City, CA', 'W02', NULL);
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST03', 'Mike Smith', '789 Pine Rd, New York City, NY', 'W01', NULL);
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST06', 'Emma Stone', '987 Cedar Ln, League City, TX', 'W03', NULL);
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST02', 'Jane Roe', '456 Oak Ave, Studio City, CA', 'W02', 'ST01');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST04', 'Sara Lee', '321 Maple Dr, Studio City, CA', 'W02', 'ST01');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST05', 'Tom Hanks', '654 Elm St, New York City, NY', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST07', 'Chris Evans', '135 Spruce Way, New York City, NY', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST08', 'Scarlett Johansson', '246 Birch Blvd, Studio City, CA', 'W02', 'ST01');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST09', 'Mark Ruffalo', '357 Ash Ct, Texas City, TX', 'W03', 'ST06');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST10', 'Jeremy Renner', '468 Walnut Pl, Jersey City, NJ', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST11', 'Paul Rudd', '579 Cherry St, New York City, NY', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST12', 'Brie Larson', '680 Willow Dr, Jersey City, NJ', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST13', 'Chadwick Boseman', '791 Poplar Ave, New York City, NY', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST14', 'Tom Holland', '802 Beech Rd, League City, TX', 'W03', 'ST06');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST15', 'Benedict Cumberbatch', '913 Cypress Ln, New York City, NY', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST16', 'Tom Cruise', '124 Main St, Jersey City, NJ', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST17', 'Tommy Teo', '457 Oak Ave, Culver City, CA', 'W02', 'ST01');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST18', 'Chris Stone', '790 Pine Rd, Studio City, CA', 'W02', 'ST01');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST19', 'Elinalise Stone', '322 Maple Dr, New York City, NY', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST20', 'Lucas Vance', '655 Elm St, Studio City, CA', 'W02', 'ST01');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST21', 'Raheem Sterling', '988 Cedar Ln, New York City, NY', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST22', 'Marcus Rashford', '136 Spruce Way, Studio City, CA', 'W02', 'ST01');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST23', 'Lamine Yamal', '247 Birch Blvd, New York City, NY', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST24', 'Kevin De Bruyne', '358 Ash Ct, League City, TX', 'W03', 'ST06');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST25', 'Luka Modric', '469 Walnut Pl, New York City, NY', 'W01', 'ST03');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST26', 'Lukas Hernandez', '580 Cherry St, League City, TX', 'W03', 'ST06');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST27', 'Kylian Mbappe', '681 Willow Dr, Texas City, TX', 'W03', 'ST06');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST28', 'Vinicious JR', '792 Poplar Ave, League City, TX', 'W03', 'ST06');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST29', 'Jude Bellingham', '803 Beech Rd, Culver City, CA', 'W02', 'ST01');
+INSERT INTO STAFF (Staff_ID, Staff_Name, Staff_Address, Warehouse_ID, Supervisor_ID) VALUES ('ST30', 'Jobe Bellingham', '914 Cypress Ln, League City, TX', 'W03', 'ST06');
+-- STAFF_PHONE
+INSERT INTO STAFF_PHONE VALUES ('ST01', '555-0301');
+INSERT INTO STAFF_PHONE VALUES ('ST01', '555-0401');
+INSERT INTO STAFF_PHONE VALUES ('ST02', '555-0302');
+INSERT INTO STAFF_PHONE VALUES ('ST02', '555-0402');
+INSERT INTO STAFF_PHONE VALUES ('ST03', '555-0303');
+INSERT INTO STAFF_PHONE VALUES ('ST03', '555-0403');
+INSERT INTO STAFF_PHONE VALUES ('ST04', '555-0304');
+INSERT INTO STAFF_PHONE VALUES ('ST04', '555-0404');
+INSERT INTO STAFF_PHONE VALUES ('ST05', '555-0305');
+INSERT INTO STAFF_PHONE VALUES ('ST06', '555-0306');
+INSERT INTO STAFF_PHONE VALUES ('ST06', '555-0406');
+INSERT INTO STAFF_PHONE VALUES ('ST07', '555-0307');
+INSERT INTO STAFF_PHONE VALUES ('ST08', '555-0308');
+INSERT INTO STAFF_PHONE VALUES ('ST09', '555-0309');
+INSERT INTO STAFF_PHONE VALUES ('ST09', '555-0409');
+INSERT INTO STAFF_PHONE VALUES ('ST10', '555-0310');
+INSERT INTO STAFF_PHONE VALUES ('ST11', '555-0311');
+INSERT INTO STAFF_PHONE VALUES ('ST12', '555-0312');
+INSERT INTO STAFF_PHONE VALUES ('ST13', '555-0313');
+INSERT INTO STAFF_PHONE VALUES ('ST13', '555-0413');
+INSERT INTO STAFF_PHONE VALUES ('ST14', '555-0314');
+INSERT INTO STAFF_PHONE VALUES ('ST15', '555-0315');
+INSERT INTO STAFF_PHONE VALUES ('ST15', '555-0415');
+INSERT INTO STAFF_PHONE VALUES ('ST16', '555-0316');
+INSERT INTO STAFF_PHONE VALUES ('ST17', '555-0317');
+INSERT INTO STAFF_PHONE VALUES ('ST18', '555-0318');
+INSERT INTO STAFF_PHONE VALUES ('ST18', '555-0418');
+INSERT INTO STAFF_PHONE VALUES ('ST19', '555-0319');
+INSERT INTO STAFF_PHONE VALUES ('ST20', '555-0320');
+INSERT INTO STAFF_PHONE VALUES ('ST21', '555-0321');
+INSERT INTO STAFF_PHONE VALUES ('ST22', '555-0322');
+INSERT INTO STAFF_PHONE VALUES ('ST22', '555-0422');
+INSERT INTO STAFF_PHONE VALUES ('ST23', '555-0323');
+INSERT INTO STAFF_PHONE VALUES ('ST24', '555-0324');
+INSERT INTO STAFF_PHONE VALUES ('ST25', '555-0325');
+INSERT INTO STAFF_PHONE VALUES ('ST25', '555-0425');
+INSERT INTO STAFF_PHONE VALUES ('ST26', '555-0326');
+INSERT INTO STAFF_PHONE VALUES ('ST27', '555-0327');
+INSERT INTO STAFF_PHONE VALUES ('ST28', '555-0328');
+INSERT INTO STAFF_PHONE VALUES ('ST28', '555-0428');
+INSERT INTO STAFF_PHONE VALUES ('ST29', '555-0329');
+INSERT INTO STAFF_PHONE VALUES ('ST30', '555-0330');
+-- PRODUCT
+INSERT INTO PRODUCT VALUES ('P01', 'pcs', 'Ambient', 50, 'Laptop');
+INSERT INTO PRODUCT VALUES ('P02', 'pcs', 'Cold', 20, 'Frozen Pizza');
+INSERT INTO PRODUCT VALUES ('P03', 'box', 'Ambient', 100, 'Paper A4');
+INSERT INTO PRODUCT VALUES ('P04', 'pcs', 'Hazardous', 10, 'Bleach');
+INSERT INTO PRODUCT VALUES ('P05', 'pcs', 'Ambient', 30, 'Office Chair');
+INSERT INTO PRODUCT VALUES ('P06', 'pcs', 'Cold', 50, 'Ice Cream');
+INSERT INTO PRODUCT VALUES ('P07', 'pcs', 'Ambient', 40, 'Monitor');
+INSERT INTO PRODUCT VALUES ('P08', 'box', 'Ambient', 200, 'Pens');
+INSERT INTO PRODUCT VALUES ('P09', 'pcs', 'Hazardous', 15, 'Battery');
+INSERT INTO PRODUCT VALUES ('P10', 'pcs', 'Ambient', 60, 'Keyboard');
+INSERT INTO PRODUCT VALUES ('P11', 'pcs', 'Cold', 30, 'Frozen Peas');
+INSERT INTO PRODUCT VALUES ('P12', 'pcs', 'Ambient', 25, 'Desk');
+INSERT INTO PRODUCT VALUES ('P13', 'box', 'Ambient', 150, 'Staples');
+INSERT INTO PRODUCT VALUES ('P14', 'pcs', 'Hazardous', 5, 'Motor Oil');
+INSERT INTO PRODUCT VALUES ('P15', 'pcs', 'Ambient', 80, 'Mouse');
+INSERT INTO PRODUCT VALUES ('P16', 'pcs', 'Dry Ambient', 50, 'Wireless Mouse');
+INSERT INTO PRODUCT VALUES ('P17', 'pcs', 'Cold', 15, 'Thermal Conductivity Paste');
+INSERT INTO PRODUCT VALUES ('P18', 'pcs', 'Cold', 30, 'Frozen Beef');
+INSERT INTO PRODUCT VALUES ('P19', 'pcs', 'Ambient', 40, 'HDMI Cable');
+INSERT INTO PRODUCT VALUES ('P20', 'box', 'Ambient', 35, 'Ergonomic Keyboard');
+INSERT INTO PRODUCT VALUES ('P21', 'pcs', 'Ambient', 120, 'Ballpoint Pens');
+INSERT INTO PRODUCT VALUES ('P22', 'pcs', 'Cold', 25, 'Fresh Milk');
+INSERT INTO PRODUCT VALUES ('P23', 'pcs', 'Hazardous', 10, 'Power Bank');
+INSERT INTO PRODUCT VALUES ('P24', 'pcs', 'Ambient', 20, 'Docking Station');
+INSERT INTO PRODUCT VALUES ('P25', 'pcs', 'Hazardous', 8, 'Surface Disinfectant');
+INSERT INTO PRODUCT VALUES ('P26', 'case', 'Ambient', 45, 'Receipt paper roll');
+INSERT INTO PRODUCT VALUES ('P27', 'pcs', 'Cold', 15, 'Ice Cream Cake');
+INSERT INTO PRODUCT VALUES ('P28', 'pcs', 'Ambient', 15, 'LED Monitor');
+INSERT INTO PRODUCT VALUES ('P29', 'pcs', 'Ambient', 60, 'Mechanical Keyboard Switches');
+INSERT INTO PRODUCT VALUES ('P30', 'Pack', 'Hazardous', 12, 'AAA Batteries');
+-- CUSTOMER_ORDER
+INSERT INTO CUSTOMER_ORDER VALUES ('CO01', '2026-10-10 09:10:00', 'Delivered', 'C01');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO02', '2026-10-10 10:45:00', 'Delivered', 'C02');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO03', '2026-10-10 15:10:00', 'Delivered', 'C03');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO04', '2026-10-10 18:40:00', 'Delivered', 'C04');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO05', '2026-10-12 07:40:00', 'Delivered', 'C05');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO06', '2026-10-12 09:30:00', 'Delivered', 'C06');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO07', '2026-10-12 09:50:00', 'Delivered', 'C07');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO08', '2026-10-12 10:20:00', 'Delivered', 'C08');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO09', '2026-10-13 07:30:00', 'Shipped', 'C09');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO10', '2026-10-13 14:15:00', 'Shipped', 'C10');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO11', '2026-10-13 15:45:00', 'Pending', 'C11');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO12', '2026-10-13 16:00:00', 'Pending', 'C12');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO13', '2026-10-14 09:40:00', 'Pending', 'C13');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO14', '2026-10-14 10:40:00', 'Pending', 'C14');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO15', '2026-10-14 11:10:00', 'Pending', 'C15');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO16', '2026-10-14 15:40:00', 'Pending', 'C16');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO17', '2026-10-14 16:40:00', 'Shipped', 'C17');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO18', '2026-10-15 07:20:00', 'Pending', 'C18');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO19', '2026-10-15 08:45:00', 'Pending', 'C19');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO20', '2026-10-15 11:50:00', 'Pending', 'C20');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO21', '2026-10-15 14:15:00', 'Pending', 'C21');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO22', '2026-10-15 18:40:00', 'Shipped', 'C22');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO23', '2026-10-16 12:15:00', 'Pending', 'C23');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO24', '2026-10-16 14:40:00', 'Pending', 'C24');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO25', '2026-10-16 15:15:00', 'Pending', 'C25');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO26', '2026-10-16 15:50:00', 'Pending', 'C26');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO27', '2026-10-17 11:40:00', 'Pending', 'C27');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO28', '2026-10-17 12:10:00', 'Pending', 'C28');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO29', '2026-10-17 12:15:00', 'Pending', 'C29');
+INSERT INTO CUSTOMER_ORDER VALUES ('CO30', '2026-10-17 12:45:00', 'Pending', 'C30');
+-- TASK
+INSERT INTO TASK VALUES ('T01', 'Completed', 'Weekly Inventory Audit', 'ST01');
+INSERT INTO TASK VALUES ('T02', 'Pending', 'Morning Putaway', 'ST02');
+INSERT INTO TASK VALUES ('T03', 'In Progress', 'Emergency Count', 'ST03');
+INSERT INTO TASK VALUES ('T04', 'Completed', 'Order Picking', 'ST04');
+INSERT INTO TASK VALUES ('T05', 'Pending', 'Pallet Wrapping', 'ST05');
+INSERT INTO TASK VALUES ('T06', 'In Progress', 'Dock Clearing', 'ST06');
+INSERT INTO TASK VALUES ('T07', 'Completed', 'Replenishment', 'ST07');
+INSERT INTO TASK VALUES ('T08', 'Pending', 'Cycle Count', 'ST08');
+INSERT INTO TASK VALUES ('T09', 'In Progress', 'Quality Inspection', 'ST09');
+INSERT INTO TASK VALUES ('T10', 'Completed', 'Damage Processing', 'ST10');
+INSERT INTO TASK VALUES ('T11', 'Pending', 'Return Sorting', 'ST11');
+INSERT INTO TASK VALUES ('T12', 'In Progress', 'Equipment Maintenance', 'ST12');
+INSERT INTO TASK VALUES ('T13', 'Completed', 'Shift Handover', 'ST13');
+INSERT INTO TASK VALUES ('T14', 'Pending', 'Restocking Aisle 1', 'ST14');
+INSERT INTO TASK VALUES ('T15', 'In Progress', 'Restocking Aisle 2', 'ST15');
+INSERT INTO TASK VALUES ('T16', 'In Progress', 'Loading Truck A', 'ST16');
+INSERT INTO TASK VALUES ('T17', 'In Progress', 'Loading Truck B', 'ST17');
+INSERT INTO TASK VALUES ('T18', 'In Progress', 'Unloading Truck C', 'ST18');
+INSERT INTO TASK VALUES ('T19', 'In Progress', 'Bin Consolidation', 'ST19');
+INSERT INTO TASK VALUES ('T20', 'In Progress', 'Forklift Charging', 'ST20');
+INSERT INTO TASK VALUES ('T21', 'In Progress', 'Spill Cleanup', 'ST21');
+INSERT INTO TASK VALUES ('T22', 'In Progress', 'Label Printing', 'ST22');
+INSERT INTO TASK VALUES ('T23', 'In Progress', 'Packaging', 'ST23');
+INSERT INTO TASK VALUES ('T24', 'In Progress', 'Safety Briefing', 'ST24');
+INSERT INTO TASK VALUES ('T25', 'In Progress', 'Route Planning', 'ST25');
+INSERT INTO TASK VALUES ('T26', 'In Progress', 'Dispatch Verification', 'ST26');
+INSERT INTO TASK VALUES ('T27', 'In Progress', 'Inventory Reconciliation', 'ST27');
+INSERT INTO TASK VALUES ('T28', 'In Progress', 'Temperature Check', 'ST28');
+INSERT INTO TASK VALUES ('T29', 'In Progress', 'Expiry Date Audit', 'ST29');
+INSERT INTO TASK VALUES ('T30', 'In Progress', 'Scrap Disposal', 'ST30');
+-- GOODS_RECEIPT
+INSERT INTO GOODS_RECEIPT VALUES ('GR01', '2026-10-01', 'S10');
+INSERT INTO GOODS_RECEIPT VALUES ('GR02', '2026-10-03', 'S13');
+INSERT INTO GOODS_RECEIPT VALUES ('GR03', '2026-10-05', 'S03');
+INSERT INTO GOODS_RECEIPT VALUES ('GR04', '2026-10-06', 'S10');
+INSERT INTO GOODS_RECEIPT VALUES ('GR05', '2026-10-06', 'S25');
+INSERT INTO GOODS_RECEIPT VALUES ('GR06', '2026-10-07', 'S29');
+INSERT INTO GOODS_RECEIPT VALUES ('GR07', '2026-10-08', 'S27');
+INSERT INTO GOODS_RECEIPT VALUES ('GR08', '2026-10-09', 'S30');
+INSERT INTO GOODS_RECEIPT VALUES ('GR09', '2026-10-09', 'S30');
+INSERT INTO GOODS_RECEIPT VALUES ('GR10', '2026-10-12', 'S23');
+INSERT INTO GOODS_RECEIPT VALUES ('GR11', '2026-10-12', 'S19');
+INSERT INTO GOODS_RECEIPT VALUES ('GR12', '2026-10-13', 'S28');
+INSERT INTO GOODS_RECEIPT VALUES ('GR13', '2026-10-14', 'S13');
+INSERT INTO GOODS_RECEIPT VALUES ('GR14', '2026-10-15', 'S18');
+INSERT INTO GOODS_RECEIPT VALUES ('GR15', '2026-10-15', 'S15');
+-- GOODS_RECEIPT_LINE
+INSERT INTO GOODS_RECEIPT_LINE VALUES (55, 1, 'B009', 'GR01', 'P12', 'A02', 'Z01', 'W01');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (120, 1, 'B007', 'GR02', 'P03', 'A02', 'Z02', 'W02');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (60, 1, 'B007', 'GR03', 'P03', 'A02', 'Z01', 'W03');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (40, 2, 'B004', 'GR03', 'P05', 'A01', 'Z01', 'W03');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (11, 1, 'B009', 'GR04', 'P12', 'A02', 'Z02', 'W02');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (13, 1, 'B008', 'GR05', 'P25', 'A02', 'Z03', 'W03');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (125, 1, 'B004', 'GR06', 'P29', 'A01', 'Z01', 'W01');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (20, 1, 'B005', 'GR07', 'P27', 'A01', 'Z03', 'W02');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (15, 1, 'B007', 'GR08', 'P30', 'A02', 'Z01', 'W02');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (9, 1, 'B010', 'GR09', 'P30', 'A02', 'Z03', 'W03');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (20, 1, 'B003', 'GR10', 'P23', 'A01', 'Z03', 'W03');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (30, 1, 'B005', 'GR11', 'P19', 'A01', 'Z02', 'W03');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (5, 1, 'B008', 'GR12', 'P28', 'A02', 'Z02', 'W03');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (80, 1, 'B007', 'GR13', 'P03', 'A02', 'Z01', 'W03');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (20, 1, 'B006', 'GR14', 'P18', 'A02', 'Z03', 'W02');
+INSERT INTO GOODS_RECEIPT_LINE VALUES (20, 1, 'B007', 'GR15', 'P01', 'A02', 'Z01', 'W03');
+-- GOODS_ISSUE
+INSERT INTO GOODS_ISSUE VALUES ('GI01', '2026-10-12', 'Fragile', 'Completed', 'CO01');
+INSERT INTO GOODS_ISSUE VALUES ('GI02', '2026-10-12', 'Fragile', 'Completed', 'CO02');
+INSERT INTO GOODS_ISSUE VALUES ('GI03', '2026-10-12', 'Perishable', 'Completed', 'CO03');
+INSERT INTO GOODS_ISSUE VALUES ('GI04', '2026-10-12', 'Good', 'Completed', 'CO04');
+INSERT INTO GOODS_ISSUE VALUES ('GI05', '2026-10-13', 'Good', 'Completed', 'CO05');
+INSERT INTO GOODS_ISSUE VALUES ('GI06', '2026-10-13', 'Fragile', 'Completed', 'CO06');
+INSERT INTO GOODS_ISSUE VALUES ('GI07', '2026-10-13', 'Hazardous', 'Completed', 'CO07');
+INSERT INTO GOODS_ISSUE VALUES ('GI08', '2026-10-13', 'Perishable', 'Completed', 'CO08');
+INSERT INTO GOODS_ISSUE VALUES ('GI09', '2026-10-14', 'Good', 'Shipped', 'CO09');
+INSERT INTO GOODS_ISSUE VALUES ('GI10', '2026-10-14', 'Hazardous', 'Shipped', 'CO10');
+INSERT INTO GOODS_ISSUE VALUES ('GI11', '2026-10-15', 'Good', 'Shipped', 'CO17');
+INSERT INTO GOODS_ISSUE VALUES ('GI12', '2026-10-15', 'Fragile', 'Shipped', 'CO17');
+INSERT INTO GOODS_ISSUE VALUES ('GI13', '2026-10-16', 'Good', 'Shipped', 'CO22');
+INSERT INTO GOODS_ISSUE VALUES ('GI14', '2026-10-16', 'Perishable', 'Shipped', 'CO22');
+INSERT INTO GOODS_ISSUE VALUES ('GI15', '2026-10-16', 'Perishable', 'Shipped', 'CO22');
+INSERT INTO GOODS_ISSUE VALUES ('GI16', '2026-10-17', 'Fragile', 'Pending', 'CO27');
+-- GOODS_ISSUE_LINE
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI01', 9, 'P26', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI01', 2, 'P28', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI02', 5, 'P05', 'B004', 'A01', 'Z01', 'W03');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI02', 7, 'P07', 'B004', 'A01', 'Z01', 'W03');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI03', 11, 'P02', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI03', 6, 'P18', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI04', 29, 'P21', 'B005', 'A01', 'Z01', 'W03');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI05', 12, 'P10', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI06', 10, 'P01', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI07', 7, 'P30', 'B007', 'A02', 'Z01', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI08', 11, 'P02', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI09', 13, 'P16', 'B006', 'A02', 'Z02', 'W03');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI09', 6, 'P26', 'B006', 'A02', 'Z02', 'W03');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI10', 2, 'P04', 'B010', 'A02', 'Z01', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI10', 4, 'P09', 'B010', 'A02', 'Z01', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI11', 33, 'P08', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI11', 4, 'P19', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI12', 8, 'P05', 'B004', 'A01', 'Z01', 'W03');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI12', 4, 'P07', 'B004', 'A01', 'Z01', 'W03');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI13', 30, 'P03', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI13', 8, 'P05', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI14', 9, 'P18', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI14', 13, 'P22', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI15', 15, 'P02', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI15', 8, 'P06', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (1, 'GI16', 10, 'P01', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO GOODS_ISSUE_LINE VALUES (2, 'GI16', 25, 'P03', 'B007', 'A02', 'Z02', 'W02');
+-- STOCK_HISTORY
+INSERT INTO STOCK_HISTORY VALUES ('SH01', '2026-10-05', 15, 'P05', 'B001', 'A01', 'Z01', 'W01');
+INSERT INTO STOCK_HISTORY VALUES ('SH02', '2026-10-05', 39, 'P20', 'B001', 'A01', 'Z03', 'W01');
+INSERT INTO STOCK_HISTORY VALUES ('SH03', '2026-10-05', 30, 'P01', 'B002', 'A01', 'Z03', 'W01');
+INSERT INTO STOCK_HISTORY VALUES ('SH04', '2026-10-05', 54, 'P26', 'B004', 'A01', 'Z02', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH05', '2026-10-05', 401, 'P08', 'B005', 'A01', 'Z01', 'W03');
+INSERT INTO STOCK_HISTORY VALUES ('SH06', '2026-10-05', 14, 'P25', 'B008', 'A02', 'Z03', 'W03');
+INSERT INTO STOCK_HISTORY VALUES ('SH07', '2026-10-06', 50, 'P19', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH08', '2026-10-06', 16, 'P24', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO STOCK_HISTORY VALUES ('SH09', '2026-10-06', 25, 'P25', 'B010', 'A02', 'Z03', 'W03');
+INSERT INTO STOCK_HISTORY VALUES ('SH10', '2026-10-07', 7, 'P24', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO STOCK_HISTORY VALUES ('SH11', '2026-10-07', 6, 'P14', 'B002', 'A01', 'Z01', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH12', '2026-10-07', 239, 'P03', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH13', '2026-10-07', 112, 'P15', 'B005', 'A01', 'Z02', 'W03');
+INSERT INTO STOCK_HISTORY VALUES ('SH14', '2026-10-08', 222, 'P21', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO STOCK_HISTORY VALUES ('SH15', '2026-10-08', 32, 'P30', 'B007', 'A02', 'Z01', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH16', '2026-10-08', 8, 'P12', 'B009', 'A02', 'Z02', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH17', '2026-10-08', 122, 'P26', 'B006', 'A02', 'Z02', 'W03');
+INSERT INTO STOCK_HISTORY VALUES ('SH18', '2026-10-09', 7, 'P27', 'B002', 'A01', 'Z02', 'W01');
+INSERT INTO STOCK_HISTORY VALUES ('SH19', '2026-10-09', 11, 'P14', 'B008', 'A02', 'Z01', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH20', '2026-10-09', 65, 'P22', 'B005', 'A01', 'Z03', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH21', '2026-10-09', 244, 'P13', 'B009', 'A02', 'Z02', 'W03');
+INSERT INTO STOCK_HISTORY VALUES ('SH22', '2026-10-10', 33, 'P22', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO STOCK_HISTORY VALUES ('SH23', '2026-10-10', 10, 'P25', 'B010', 'A02', 'Z01', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH24', '2026-10-10', 34, 'P18', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH25', '2026-10-10', 11, 'P04', 'B004', 'A01', 'Z03', 'W03');
+INSERT INTO STOCK_HISTORY VALUES ('SH26', '2026-10-11', 115, 'P29', 'B004', 'A01', 'Z01', 'W01');
+INSERT INTO STOCK_HISTORY VALUES ('SH27', '2026-10-11', 40, 'P06', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO STOCK_HISTORY VALUES ('SH28', '2026-10-11', 3, 'P07', 'B001', 'A01', 'Z02', 'W02');
+INSERT INTO STOCK_HISTORY VALUES ('SH29', '2026-10-11', 80, 'P05', 'B004', 'A01', 'Z01', 'W03');
+INSERT INTO STOCK_HISTORY VALUES ('SH30', '2026-10-11', 1, 'P04', 'B007', 'A02', 'Z03', 'W03');
+-- STOCK_MOVEMENT
+INSERT INTO STOCK_MOVEMENT VALUES ('SM01', 59, '2026-08-20 15:15:00', 'ST03', 'P01', 'B001', 'A01', 'Z01', 'W01', 'B002', 'A01', 'Z03', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM02', 170, '2026-08-26 16:30:00', 'ST30', 'P08', 'B005', 'A01', 'Z01', 'W03', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM03', 120, '2026-08-28 13:00:00', 'ST25', 'P13', 'B002', 'A01', 'Z01', 'W01', 'B009', 'A02', 'Z02', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM04', 30, '2026-09-02 16:30:00', 'ST01', 'P10', 'B002', 'A01', 'Z02', 'W02', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM05', 160, '2026-09-03 15:00:00', 'ST03', 'P21', 'B005', 'A01', 'Z01', 'W03', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM06', 40, '2026-09-05 09:15:00', 'ST30', 'P09', 'B001', 'A01', 'Z03', 'W03', 'B008', 'A02', 'Z03', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM07', 6, '2026-09-08 08:45:00', 'ST22', 'P23', 'B002', 'A01', 'Z01', 'W02', 'B003', 'A01', 'Z03', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM08', 35, '2026-09-09 16:10:00', 'ST13', 'P10', 'B005', 'A01', 'Z01', 'W01', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM09', 35, '2026-09-10 13:40:00', 'ST03', 'P18', 'B003', 'A01', 'Z02', 'W01', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM10', 45, '2026-09-11 09:15:00', 'ST05', 'P26', 'B006', 'A02', 'Z02', 'W03', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM11', 15, '2026-09-14 14:15:00', 'ST08', 'P05', 'B001', 'A01', 'Z02', 'W02', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM12', 12, '2026-09-15 12:00:00', 'ST15', 'P22', 'B002', 'A01', 'Z02', 'W01', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM13', 25, '2026-09-16 09:50:00', 'ST22', 'P30', 'B001', 'A01', 'Z01', 'W02', 'B007', 'A02', 'Z01', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM14', 130, '2026-09-18 15:10:00', 'ST02', 'P13', 'B002', 'A01', 'Z02', 'W02', 'B009', 'A02', 'Z02', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM15', 25, '2026-09-18 16:15:00', 'ST28', 'P01', 'B002', 'A01', 'Z01', 'W03', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM16', 120, '2026-09-19 11:15:00', 'ST14', 'P03', 'B001', 'A01', 'Z01', 'W03', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM17', 119, '2026-09-19 12:20:00', 'ST21', 'P07', 'B001', 'A01', 'Z01', 'W01', 'B004', 'A01', 'Z01', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM18', 25, '2026-09-21 08:00:00', 'ST15', 'P02', 'B001', 'A01', 'Z02', 'W01', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM19', 25, '2026-09-22 12:10:00', 'ST04', 'P01', 'B003', 'A01', 'Z02', 'W02', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM20', 80, '2026-09-23 10:50:00', 'ST01', 'P03', 'B007', 'A02', 'Z01', 'W03', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM21', 10, '2026-09-24 16:40:00', 'ST13', 'P02', 'B009', 'A02', 'Z02', 'W01', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM22', 55, '2026-09-25 10:15:00', 'ST11', 'P01', 'B001', 'A01', 'Z01', 'W01', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM23', 44, '2026-09-26 13:45:00', 'ST07', 'P11', 'B001', 'A01', 'Z02', 'W01', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM24', 50, '2026-09-28 10:50:00', 'ST08', 'P02', 'B002', 'A01', 'Z03', 'W02', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM25', 55, '2026-09-29 12:30:00', 'ST19', 'P03', 'B006', 'A02', 'Z03', 'W01', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM26', 20, '2026-09-30 16:15:00', 'ST26', 'P19', 'B005', 'A01', 'Z02', 'W03', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM27', 8, '2026-10-01 10:40:00', 'ST14', 'P25', 'B008', 'A02', 'Z03', 'W03', 'B010', 'A02', 'Z03', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM28', 60, '2026-10-02 10:20:00', 'ST23', 'P15', 'B004', 'A01', 'Z01', 'W01', 'B005', 'A01', 'Z02', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM29', 30, '2026-10-06 08:10:00', 'ST12', 'P01', 'B002', 'A01', 'Z03', 'W01', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM30', 10, '2026-10-07 11:30:00', 'ST26', 'P30', 'B010', 'A02', 'Z03', 'W03', 'B007', 'A02', 'Z03', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM31', 14, '2026-10-08 08:30:00', 'ST15', 'P06', 'B006', 'A02', 'Z03', 'W02', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM32', 8, '2026-10-09 13:10:00', 'ST18', 'P12', 'B009', 'A02', 'Z02', 'W02', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM33', 20, '2026-10-12 12:50:00', 'ST12', 'P22', 'B005', 'A01', 'Z03', 'W02', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM34', 30, '2026-10-13 15:10:00', 'ST23', 'P20', 'B001', 'A01', 'Z03', 'W01', 'B006', 'A02', 'Z02', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM35', 133, '2026-10-13 16:15:00', 'ST28', 'P16', 'B001', 'A01', 'Z03', 'W01', 'B006', 'A02', 'Z02', 'W03');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM36', 45, '2026-10-14 09:40:00', 'ST05', 'P19', 'B001', 'A01', 'Z03', 'W01', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM37', 37, '2026-10-14 14:15:00', 'ST29', 'P27', 'B005', 'A01', 'Z03', 'W02', 'B010', 'A02', 'Z03', 'W02');
+INSERT INTO STOCK_MOVEMENT VALUES ('SM38', 20, '2026-10-15 10:20:00', 'ST13', 'P12', 'B009', 'A02', 'Z01', 'W01', 'B005', 'A01', 'Z02', 'W02');
+-- STOCK_COUNT
+INSERT INTO STOCK_COUNT VALUES ('SC01', '2026-08-18 06:30:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC02', '2026-08-21 07:30:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC03', '2026-08-25 07:00:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC04', '2026-08-28 06:45:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC05', '2026-09-01 07:45:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC06', '2026-09-04 07:15:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC07', '2026-09-09 07:30:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC08', '2026-09-11 07:00:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC09', '2026-09-15 06:45:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC10', '2026-09-18 06:45:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC11', '2026-09-23 07:30:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC12', '2026-09-25 07:30:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC13', '2026-09-29 07:00:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC14', '2026-10-02 06:15:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC15', '2026-10-06 07:15:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC16', '2026-10-09 06:45:00', 'Completed');
+INSERT INTO STOCK_COUNT VALUES ('SC17', '2026-10-13 07:30:00', 'Pending');
+INSERT INTO STOCK_COUNT VALUES ('SC18', '2026-10-15 07:00:00', 'In Progress');
+INSERT INTO STOCK_COUNT VALUES ('SC19', '2026-10-16 06:45:00', 'Completed');
+-- PRODUCT_BIN
+INSERT INTO PRODUCT_BIN VALUES ('P23', 'B003', 'A01', 'Z03', 'W03', 15);
+INSERT INTO PRODUCT_BIN VALUES ('P29', 'B004', 'A01', 'Z01', 'W01', 115);
+INSERT INTO PRODUCT_BIN VALUES ('P26', 'B004', 'A01', 'Z02', 'W02', 30);
+INSERT INTO PRODUCT_BIN VALUES ('P28', 'B004', 'A01', 'Z02', 'W02', 3);
+INSERT INTO PRODUCT_BIN VALUES ('P05', 'B004', 'A01', 'Z01', 'W03', 65);
+INSERT INTO PRODUCT_BIN VALUES ('P07', 'B004', 'A01', 'Z01', 'W03', 60);
+INSERT INTO PRODUCT_BIN VALUES ('P04', 'B004', 'A01', 'Z03', 'W03', 2);
+INSERT INTO PRODUCT_BIN VALUES ('P08', 'B005', 'A01', 'Z02', 'W02', 265);
+INSERT INTO PRODUCT_BIN VALUES ('P12', 'B005', 'A01', 'Z02', 'W02', 45);
+INSERT INTO PRODUCT_BIN VALUES ('P19', 'B005', 'A01', 'Z02', 'W02', 85);
+INSERT INTO PRODUCT_BIN VALUES ('P17', 'B005', 'A01', 'Z03', 'W02', 3);
+INSERT INTO PRODUCT_BIN VALUES ('P22', 'B005', 'A01', 'Z03', 'W02', 45);
+INSERT INTO PRODUCT_BIN VALUES ('P27', 'B005', 'A01', 'Z03', 'W02', 10);
+INSERT INTO PRODUCT_BIN VALUES ('P08', 'B005', 'A01', 'Z01', 'W03', 290);
+INSERT INTO PRODUCT_BIN VALUES ('P21', 'B005', 'A01', 'Z01', 'W03', 275);
+INSERT INTO PRODUCT_BIN VALUES ('P15', 'B005', 'A01', 'Z02', 'W03', 85);
+INSERT INTO PRODUCT_BIN VALUES ('P19', 'B005', 'A01', 'Z02', 'W03', 80);
+INSERT INTO PRODUCT_BIN VALUES ('P17', 'B006', 'A02', 'Z02', 'W01', 3);
+INSERT INTO PRODUCT_BIN VALUES ('P18', 'B006', 'A02', 'Z02', 'W01', 25);
+INSERT INTO PRODUCT_BIN VALUES ('P22', 'B006', 'A02', 'Z02', 'W01', 40);
+INSERT INTO PRODUCT_BIN VALUES ('P02', 'B006', 'A02', 'Z03', 'W02', 20);
+INSERT INTO PRODUCT_BIN VALUES ('P06', 'B006', 'A02', 'Z03', 'W02', 50);
+INSERT INTO PRODUCT_BIN VALUES ('P18', 'B006', 'A02', 'Z03', 'W02', 40);
+INSERT INTO PRODUCT_BIN VALUES ('P16', 'B006', 'A02', 'Z02', 'W03', 120);
+INSERT INTO PRODUCT_BIN VALUES ('P20', 'B006', 'A02', 'Z02', 'W03', 30);
+INSERT INTO PRODUCT_BIN VALUES ('P26', 'B006', 'A02', 'Z02', 'W03', 95);
+INSERT INTO PRODUCT_BIN VALUES ('P30', 'B007', 'A02', 'Z01', 'W02', 30);
+INSERT INTO PRODUCT_BIN VALUES ('P01', 'B007', 'A02', 'Z02', 'W02', 90);
+INSERT INTO PRODUCT_BIN VALUES ('P03', 'B007', 'A02', 'Z02', 'W02', 190);
+INSERT INTO PRODUCT_BIN VALUES ('P05', 'B007', 'A02', 'Z02', 'W02', 25);
+INSERT INTO PRODUCT_BIN VALUES ('P01', 'B007', 'A02', 'Z01', 'W03', 75);
+INSERT INTO PRODUCT_BIN VALUES ('P03', 'B007', 'A02', 'Z01', 'W03', 235);
+INSERT INTO PRODUCT_BIN VALUES ('P24', 'B007', 'A02', 'Z01', 'W03', 6);
+INSERT INTO PRODUCT_BIN VALUES ('P04', 'B007', 'A02', 'Z03', 'W03', 1);
+INSERT INTO PRODUCT_BIN VALUES ('P30', 'B007', 'A02', 'Z03', 'W03', 10);
+INSERT INTO PRODUCT_BIN VALUES ('P14', 'B008', 'A02', 'Z01', 'W02', 10);
+INSERT INTO PRODUCT_BIN VALUES ('P28', 'B008', 'A02', 'Z02', 'W03', 3);
+INSERT INTO PRODUCT_BIN VALUES ('P09', 'B008', 'A02', 'Z03', 'W03', 25);
+INSERT INTO PRODUCT_BIN VALUES ('P14', 'B008', 'A02', 'Z03', 'W03', 10);
+INSERT INTO PRODUCT_BIN VALUES ('P25', 'B008', 'A02', 'Z03', 'W03', 15);
+INSERT INTO PRODUCT_BIN VALUES ('P10', 'B009', 'A02', 'Z01', 'W01', 14);
+INSERT INTO PRODUCT_BIN VALUES ('P12', 'B009', 'A02', 'Z01', 'W01', 60);
+INSERT INTO PRODUCT_BIN VALUES ('P24', 'B009', 'A02', 'Z01', 'W01', 5);
+INSERT INTO PRODUCT_BIN VALUES ('P02', 'B009', 'A02', 'Z02', 'W01', 30);
+INSERT INTO PRODUCT_BIN VALUES ('P06', 'B009', 'A02', 'Z02', 'W01', 35);
+INSERT INTO PRODUCT_BIN VALUES ('P11', 'B009', 'A02', 'Z02', 'W01', 30);
+INSERT INTO PRODUCT_BIN VALUES ('P13', 'B009', 'A02', 'Z02', 'W03', 190);
+INSERT INTO PRODUCT_BIN VALUES ('P21', 'B010', 'A02', 'Z01', 'W01', 160);
+INSERT INTO PRODUCT_BIN VALUES ('P26', 'B010', 'A02', 'Z01', 'W01', 110);
+INSERT INTO PRODUCT_BIN VALUES ('P28', 'B010', 'A02', 'Z01', 'W01', 5);
+INSERT INTO PRODUCT_BIN VALUES ('P04', 'B010', 'A02', 'Z01', 'W02', 1);
+INSERT INTO PRODUCT_BIN VALUES ('P09', 'B010', 'A02', 'Z01', 'W02', 10);
+INSERT INTO PRODUCT_BIN VALUES ('P25', 'B010', 'A02', 'Z01', 'W02', 5);
+INSERT INTO PRODUCT_BIN VALUES ('P27', 'B010', 'A02', 'Z03', 'W02', 30);
+INSERT INTO PRODUCT_BIN VALUES ('P25', 'B010', 'A02', 'Z03', 'W03', 15);
+INSERT INTO PRODUCT_BIN VALUES ('P30', 'B010', 'A02', 'Z03', 'W03', 20);
+-- COUNT_LINE
+INSERT INTO COUNT_LINE VALUES (1, 'SC01', 39, 39, 'P10', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (2, 'SC01', 28, 28, 'P12', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (3, 'SC01', 48, 52, 'P24', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (4, 'SC01', 319, 319, 'P21', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (5, 'SC01', 181, 183, 'P26', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (6, 'SC01', 20, 21, 'P28', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (1, 'SC02', 61, 61, 'P09', 'B001', 'A01', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (2, 'SC02', 27, 24, 'P30', 'B001', 'A01', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (3, 'SC02', 23, 27, 'P14', 'B002', 'A01', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (4, 'SC02', 20, 20, 'P23', 'B002', 'A01', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (5, 'SC02', 83, 83, 'P30', 'B007', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (6, 'SC02', 18, 18, 'P14', 'B008', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (7, 'SC02', 21, 22, 'P04', 'B010', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (8, 'SC02', 48, 50, 'P09', 'B010', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (9, 'SC02', 33, 36, 'P25', 'B010', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (1, 'SC03', 146, 145, 'P03', 'B001', 'A01', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (2, 'SC03', 37, 37, 'P01', 'B002', 'A01', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (3, 'SC03', 65, 65, 'P05', 'B004', 'A01', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (4, 'SC03', 562, 562, 'P08', 'B005', 'A01', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (5, 'SC03', 912, 912, 'P21', 'B005', 'A01', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (6, 'SC03', 63, 65, 'P01', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (7, 'SC03', 224, 224, 'P03', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (8, 'SC03', 30, 30, 'P24', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (1, 'SC04', 84, 84, 'P02', 'B001', 'A01', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (2, 'SC04', 10, 10, 'P06', 'B001', 'A01', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (3, 'SC04', 50, 50, 'P11', 'B001', 'A01', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (4, 'SC04', 33, 33, 'P22', 'B002', 'A01', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (5, 'SC04', 28, 28, 'P27', 'B002', 'A01', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (6, 'SC04', 68, 68, 'P18', 'B003', 'A01', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (1, 'SC05', 45, 45, 'P01', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (2, 'SC05', 113, 112, 'P03', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (3, 'SC05', 66, 66, 'P05', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (1, 'SC06', 21, 19, 'P16', 'B001', 'A01', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (2, 'SC06', 60, 60, 'P15', 'B005', 'A01', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (3, 'SC06', 160, 160, 'P19', 'B005', 'A01', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (4, 'SC06', 169, 169, 'P26', 'B006', 'A02', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (5, 'SC06', 61, 60, 'P10', 'B008', 'A02', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (6, 'SC06', 218, 219, 'P13', 'B009', 'A02', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (1, 'SC07', 202, 203, 'P16', 'B001', 'A01', 'Z03', 'W01');
+INSERT INTO COUNT_LINE VALUES (2, 'SC07', 79, 80, 'P19', 'B001', 'A01', 'Z03', 'W01');
+INSERT INTO COUNT_LINE VALUES (3, 'SC07', 78, 78, 'P20', 'B001', 'A01', 'Z03', 'W01');
+INSERT INTO COUNT_LINE VALUES (4, 'SC07', 77, 77, 'P01', 'B002', 'A01', 'Z03', 'W01');
+INSERT INTO COUNT_LINE VALUES (5, 'SC07', 183, 184, 'P03', 'B006', 'A02', 'Z03', 'W01');
+INSERT INTO COUNT_LINE VALUES (1, 'SC08', 18, 18, 'P11', 'B001', 'A01', 'Z03', 'W02');
+INSERT INTO COUNT_LINE VALUES (2, 'SC08', 73, 73, 'P02', 'B002', 'A01', 'Z03', 'W02');
+INSERT INTO COUNT_LINE VALUES (3, 'SC08', 23, 23, 'P17', 'B005', 'A01', 'Z03', 'W02');
+INSERT INTO COUNT_LINE VALUES (4, 'SC08', 148, 148, 'P22', 'B005', 'A01', 'Z03', 'W02');
+INSERT INTO COUNT_LINE VALUES (5, 'SC08', 39, 43, 'P27', 'B005', 'A01', 'Z03', 'W02');
+INSERT INTO COUNT_LINE VALUES (6, 'SC08', 69, 69, 'P02', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO COUNT_LINE VALUES (7, 'SC08', 153, 153, 'P06', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO COUNT_LINE VALUES (8, 'SC08', 43, 43, 'P18', 'B006', 'A02', 'Z03', 'W02');
+INSERT INTO COUNT_LINE VALUES (9, 'SC08', 66, 68, 'P18', 'B010', 'A02', 'Z03', 'W02');
+INSERT INTO COUNT_LINE VALUES (1, 'SC09', 20, 20, 'P23', 'B003', 'A01', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (2, 'SC09', 27, 27, 'P04', 'B004', 'A01', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (3, 'SC09', 19, 19, 'P04', 'B007', 'A02', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (4, 'SC09', 29, 26, 'P30', 'B007', 'A02', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (5, 'SC09', 83, 83, 'P09', 'B008', 'A02', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (6, 'SC09', 16, 16, 'P14', 'B008', 'A02', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (7, 'SC09', 28, 28, 'P25', 'B008', 'A02', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (8, 'SC09', 15, 15, 'P25', 'B010', 'A02', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (9, 'SC09', 41, 41, 'P30', 'B010', 'A02', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (1, 'SC10', 94, 96, 'P10', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (2, 'SC10', 51, 53, 'P12', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (3, 'SC10', 21, 21, 'P24', 'B009', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (4, 'SC10', 351, 351, 'P21', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (5, 'SC10', 167, 167, 'P26', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (6, 'SC10', 11, 12, 'P28', 'B010', 'A02', 'Z01', 'W01');
+INSERT INTO COUNT_LINE VALUES (1, 'SC11', 13, 13, 'P09', 'B001', 'A01', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (2, 'SC11', 8, 8, 'P14', 'B002', 'A01', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (3, 'SC11', 57, 57, 'P30', 'B007', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (4, 'SC11', 25, 25, 'P14', 'B008', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (5, 'SC11', 8, 5, 'P04', 'B010', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (6, 'SC11', 8, 8, 'P09', 'B010', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (7, 'SC11', 20, 20, 'P25', 'B010', 'A02', 'Z01', 'W02');
+INSERT INTO COUNT_LINE VALUES (1, 'SC12', 54, 54, 'P05', 'B004', 'A01', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (2, 'SC12', 120, 119, 'P07', 'B004', 'A01', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (3, 'SC12', 530, 532, 'P08', 'B005', 'A01', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (4, 'SC12', 523, 523, 'P21', 'B005', 'A01', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (5, 'SC12', 63, 66, 'P01', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (6, 'SC12', 165, 164, 'P03', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (7, 'SC12', 26, 27, 'P24', 'B007', 'A02', 'Z01', 'W03');
+INSERT INTO COUNT_LINE VALUES (1, 'SC13', 22, 22, 'P27', 'B002', 'A01', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (2, 'SC13', 8, 8, 'P17', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (3, 'SC13', 80, 85, 'P18', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (4, 'SC13', 33, 33, 'P22', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (5, 'SC13', 54, 54, 'P02', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (6, 'SC13', 52, 52, 'P06', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (7, 'SC13', 44, 44, 'P11', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (1, 'SC14', 21, 21, 'P07', 'B001', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (2, 'SC14', 54, 54, 'P26', 'B004', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (3, 'SC14', 22, 22, 'P28', 'B004', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (4, 'SC14', 414, 414, 'P08', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (5, 'SC14', 22, 22, 'P12', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (6, 'SC14', 62, 64, 'P19', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (7, 'SC14', 98, 98, 'P01', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (8, 'SC14', 142, 147, 'P03', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (9, 'SC14', 47, 50, 'P05', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (1, 'SC15', 112, 112, 'P15', 'B005', 'A01', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (2, 'SC15', 65, 65, 'P19', 'B005', 'A01', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (3, 'SC15', 122, 122, 'P26', 'B006', 'A02', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (4, 'SC15', 267, 269, 'P13', 'B009', 'A02', 'Z02', 'W03');
+INSERT INTO COUNT_LINE VALUES (1, 'SC16', 133, 133, 'P16', 'B001', 'A01', 'Z03', 'W01');
+INSERT INTO COUNT_LINE VALUES (2, 'SC16', 69, 71, 'P19', 'B001', 'A01', 'Z03', 'W01');
+INSERT INTO COUNT_LINE VALUES (3, 'SC16', 35, 35, 'P20', 'B001', 'A01', 'Z03', 'W01');
+INSERT INTO COUNT_LINE VALUES (1, 'SC17', 2, 2, 'P27', 'B002', 'A01', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (2, 'SC17', 3, 3, 'P17', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (3, 'SC17', 45, 46, 'P18', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (4, 'SC17', 53, 53, 'P22', 'B006', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (5, 'SC17', 41, 41, 'P02', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (6, 'SC17', 35, 35, 'P06', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (7, 'SC17', 26, 30, 'P11', 'B009', 'A02', 'Z02', 'W01');
+INSERT INTO COUNT_LINE VALUES (1, 'SC18', 15, 15, 'P23', 'B003', 'A01', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (2, 'SC18', 5, 5, 'P04', 'B004', 'A01', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (3, 'SC18', 1, 1, 'P04', 'B007', 'A02', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (4, 'SC18', 10, 10, 'P30', 'B007', 'A02', 'Z03', 'W03');
+INSERT INTO COUNT_LINE VALUES (1, 'SC19', 39, 39, 'P26', 'B004', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (2, 'SC19', 4, 5, 'P28', 'B004', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (3, 'SC19', 265, 268, 'P08', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (4, 'SC19', 45, 45, 'P12', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (5, 'SC19', 85, 85, 'P19', 'B005', 'A01', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (6, 'SC19', 90, 90, 'P01', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (7, 'SC19', 220, 218, 'P03', 'B007', 'A02', 'Z02', 'W02');
+INSERT INTO COUNT_LINE VALUES (8, 'SC19', 33, 33, 'P05', 'B007', 'A02', 'Z02', 'W02');
+
+-- ===== 4. KIEM TRA SO DONG (cot So_Dong phai bang cot Chuan) =====
+SELECT 'WAREHOUSE' AS Bang, COUNT(*) AS So_Dong, 15 AS Chuan FROM WAREHOUSE
+UNION ALL SELECT 'ZONE', COUNT(*), 21 FROM ZONE
+UNION ALL SELECT 'AISLE', COUNT(*), 30 FROM AISLE
+UNION ALL SELECT 'BIN', COUNT(*), 102 FROM BIN
+UNION ALL SELECT 'STAFF', COUNT(*), 30 FROM STAFF
+UNION ALL SELECT 'STAFF_PHONE', COUNT(*), 42 FROM STAFF_PHONE
+UNION ALL SELECT 'SUPPLIER', COUNT(*), 30 FROM SUPPLIER
+UNION ALL SELECT 'CUSTOMER', COUNT(*), 30 FROM CUSTOMER
+UNION ALL SELECT 'PRODUCT', COUNT(*), 30 FROM PRODUCT
+UNION ALL SELECT 'CUSTOMER_ORDER', COUNT(*), 30 FROM CUSTOMER_ORDER
+UNION ALL SELECT 'GOODS_RECEIPT', COUNT(*), 15 FROM GOODS_RECEIPT
+UNION ALL SELECT 'GOODS_RECEIPT_LINE', COUNT(*), 16 FROM GOODS_RECEIPT_LINE
+UNION ALL SELECT 'GOODS_ISSUE', COUNT(*), 16 FROM GOODS_ISSUE
+UNION ALL SELECT 'GOODS_ISSUE_LINE', COUNT(*), 27 FROM GOODS_ISSUE_LINE
+UNION ALL SELECT 'TASK', COUNT(*), 30 FROM TASK
+UNION ALL SELECT 'PRODUCT_BIN', COUNT(*), 56 FROM PRODUCT_BIN
+UNION ALL SELECT 'STOCK_HISTORY', COUNT(*), 30 FROM STOCK_HISTORY
+UNION ALL SELECT 'STOCK_MOVEMENT', COUNT(*), 38 FROM STOCK_MOVEMENT
+UNION ALL SELECT 'STOCK_COUNT', COUNT(*), 19 FROM STOCK_COUNT
+UNION ALL SELECT 'COUNT_LINE', COUNT(*), 123 FROM COUNT_LINE;
