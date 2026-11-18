@@ -49,6 +49,7 @@ export function createController({
     };
     $('#main').innerHTML = ui.statusBanner() + routePages[ctx.route]();
     $('#main').setAttribute('aria-busy', String(ctx.refreshing));
+    if (config.mode === 'http') services.loadRouteReports();
     if (
       ctx.route === 'reports' &&
       config.mode === 'http' &&

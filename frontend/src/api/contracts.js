@@ -1,4 +1,5 @@
 import { alignSchema } from '../state/schema.js';
+import { httpOrderLabels, httpTaskLabels } from '../config.js';
 // API boundary: IDs are strings; DECIMAL JSON strings are normalized once here.
 export class DataError extends Error {
   constructor(message) {
@@ -74,6 +75,80 @@ const mapRows = (d, name, map) =>
   list(d[name], name).map((r, i) =>
     map(object(r, `${name}[${i}]`), `${name}[${i}]`),
   );
+
+function reportDate(value, at) {
+  const result = text(value, at).replace(' ', 'T');
+  const day = result.slice(0, 10);
+  const midnight = new Date(day + 'T00:00:00Z');
+  if (
+    !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}.*)?$/.test(result) ||
+    !Number.isFinite(midnight.getTime()) ||
+    midnight.toISOString().slice(0, 10) !== day ||
+    !Number.isFinite(Date.parse(result))
+  )
+    fail(`${at} requires a valid date or timestamp.`);
+  return result;
+}
+
+export function normalizeOverstock(raw) {
+  return mapRows(object(raw, 'overstock'), 'items', (r, at) => ({
+    productId: id(r.productId, at + '.productId'),
+    productName: text(r.productName, at + '.productName'),
+    unit: text(r.unit, at + '.unit'),
+    reorderLevel: amount(r.reorderLevel, at + '.reorderLevel'),
+    totalQuantity: amount(r.totalQuantity, at + '.totalQuantity'),
+    numWarehouses: amount(r.numWarehouses, at + '.numWarehouses'),
+  }));
+}
+
+export function normalizeSlowMoving(raw, asOf) {
+  const data = object(raw, 'slow-moving');
+  if (data.asOf !== asOf)
+    fail('Slow-moving report date differs from the requested date.');
+  return mapRows(data, 'items', (r, at) => ({
+    productId: id(r.productId, at + '.productId'),
+    productName: text(r.productName, at + '.productName'),
+    onHand: amount(r.onHand, at + '.onHand'),
+  }));
+}
+
+export function normalizeWaitingOrders(raw) {
+  return mapRows(object(raw, 'awaiting-issue'), 'items', (r, at) => ({
+    orderId: id(r.orderId, at + '.orderId'),
+    time: reportDate(r.time, at + '.time'),
+    status: choice(r.status, Object.keys(httpOrderLabels), at + '.status'),
+    customerName: text(r.customerName, at + '.customerName'),
+  }));
+}
+
+export function normalizeTopCustomers(raw) {
+  return mapRows(object(raw, 'top-customers'), 'items', (r, at) => ({
+    customerId: id(r.customerId, at + '.customerId'),
+    customerName: text(r.customerName, at + '.customerName'),
+    unitsShipped: amount(r.unitsShipped, at + '.unitsShipped'),
+  }));
+}
+
+export function normalizeProductHistory(raw, productId) {
+  const data = object(raw, 'product history');
+  if (id(data.productId, 'productId') !== productId)
+    fail('Product history differs from the selected product.');
+  return mapRows(data, 'items', (r, at) => {
+    const type = text(r.type, at + '.type');
+    const quantity = amount(r.quantity, at + '.quantity', -Infinity);
+    return {
+      activityDate: reportDate(r.activityDate, at + '.activityDate'),
+      type,
+      documentId: id(r.documentId, at + '.documentId'),
+      quantity: /\bissue\b/i.test(type)
+        ? -Math.abs(quantity)
+        : /\breceipt\b/i.test(type)
+          ? Math.abs(quantity)
+          : quantity,
+      location: text(r.location, at + '.location'),
+    };
+  }).sort((a, b) => Date.parse(a.activityDate) - Date.parse(b.activityDate));
+}
 function validateLines(lines, at) {
   if (!lines.length) fail(`${at} requires at least one line.`);
   if (lines.some((l) => !Number.isInteger(l.lineNo)))
@@ -85,7 +160,11 @@ function countDto(raw, s, at) {
   const result = {
     id: id(r.id, `${at}.id`),
     date: timestamp(r.date, `${at}.date`),
-    status: choice(r.status, ['completed'], `${at}.status`),
+    status: choice(
+      r.status,
+      ['completed', 'Completed', 'Pending', 'In Progress'],
+      `${at}.status`,
+    ),
     lines: list(r.lines, `${at}.lines`).map((l, i) => {
       object(l, `${at}.lines[${i}]`);
       return {
@@ -175,7 +254,7 @@ export function normalizeBootstrap(raw) {
     id: id(r.id, at),
     customerId: ref(r.customerId, s.customers, at + '.customerId'),
     date: timestamp(r.date, at + '.date'),
-    status: choice(r.status, ['open', 'closed', 'cancelled'], at + '.status'),
+    status: choice(r.status, Object.keys(httpOrderLabels), at + '.status'),
   }));
   s.bins = mapRows(d, 'bins', (r, at) => ({
     id: id(r.id, at),
@@ -236,7 +315,7 @@ export function normalizeBootstrap(raw) {
     id: id(r.id, at),
     name: text(r.name, at),
     staffId: ref(r.staffId, s.staff, `${at}.staffId`),
-    status: choice(r.status, ['todo', 'doing', 'done'], `${at}.status`),
+    status: choice(r.status, Object.keys(httpTaskLabels), `${at}.status`),
   }));
   // Server reports do not require exposing the entire ledger to the browser.
   s.history =

@@ -923,6 +923,18 @@ nav {
 .overview-occupancy {
   grid-area: occupancy;
 }
+.overview-top-customers {
+  grid-column: 1 / -1;
+}
+.customer-ranking {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  list-style: none;
+}
+.customer-ranking .progress-track {
+  margin-top: 6px;
+}
 .overview-activity {
   grid-area: activity;
 }

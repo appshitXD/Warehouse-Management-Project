@@ -59,7 +59,7 @@ export function createApplication({
   ctx.pendingMutation = storage.readPendingMutation();
   const selectors = createSelectors({ ctx });
   const ui = createUi({ ctx });
-  const stock = createStock({ selectors, ctx, storage, env });
+  const stock = createStock({ selectors, ctx, storage, env, config });
   const services = createServices({
     config,
     ctx,
@@ -75,9 +75,9 @@ export function createApplication({
   Object.assign(pages, createMovements({ ctx, selectors, ui }));
   Object.assign(pages, createCounts({ ui, ctx, selectors }));
   Object.assign(pages, createLocations({ ui, ctx, selectors }));
-  Object.assign(pages, createTasks({ ctx, ui, selectors }));
+  Object.assign(pages, createTasks({ ctx, ui, selectors, config }));
   Object.assign(pages, createReports({ ui, ctx, config, selectors, stock }));
-  Object.assign(pages, createDirectories({ ctx, ui, selectors }));
+  Object.assign(pages, createDirectories({ ctx, ui, selectors, config }));
   const forms = createForms({
     ui,
     ctx,
@@ -85,6 +85,7 @@ export function createApplication({
     selectors,
     controller,
     env,
+    config,
     $,
     $$,
   });

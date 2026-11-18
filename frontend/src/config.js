@@ -28,6 +28,21 @@ export const orderLabels = {
 
 export const taskLabels = { todo: 'To do', doing: 'In progress', done: 'Done' };
 
+export const httpOrderLabels = {
+  Pending: 'Pending',
+  Shipped: 'Shipped',
+  Delivered: 'Delivered',
+  Cancelled: 'Cancelled',
+};
+
+export const httpTaskLabels = {
+  Pending: 'Pending',
+  'In Progress': 'In progress',
+  Completed: 'Completed',
+};
+
+export const reportsAsOf = '2026-10-18';
+
 export const endpoints = {
   receipt: '/receipts',
   issue: '/issues',

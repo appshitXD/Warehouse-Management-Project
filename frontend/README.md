@@ -6,12 +6,12 @@ Built with HTML, CSS and JavaScript ES modules. The application runs without a f
 
 ## Features
 
-- **Overview** — stock indicators, replenishment alerts, bin occupancy and recent activity.
-- **Inventory** — product catalogue, stock by location, search, filters and CSV export.
+- **Overview** — stock indicators, replenishment alerts, bin occupancy, recent activity and the top 10 customers by units shipped.
+- **Inventory** — product catalogue, stock by location, search, filters, CSV export and activity history for the selected product.
 - **Stock operations** — supplier receipts, issues against customer orders, bin-to-bin transfers and stock counts with discrepancy tracking.
 - **Locations** — warehouse, zone, aisle and bin organisation.
-- **Directories and assignments** — suppliers, staff, customers, orders and tasks.
-- **Reports** — low stock, movement history, bins empty throughout the previous week and latest count differences.
+- **Directories and assignments** — suppliers, staff, customers, orders waiting to ship and tasks.
+- **Reports** — low stock, overstock, slow-moving stock, movement history, bins empty throughout the previous week and latest count differences.
 
 ## Getting started
 
@@ -49,11 +49,18 @@ Staff records belong to a warehouse and can have a supervisor and multiple phone
 
 Product rules follow the current backend: IDs use up to 10 letters, digits, underscores or hyphens; names use up to 100 characters; reorder levels are positive integers. Storage requirements are **Ambient**, **Dry Ambient**, **Cold** or **Hazardous**.
 
+### Reviewing the operational reports
+
+1. Create a customer order and confirm it appears in **Customer Orders → Waiting to ship**.
+2. Record a receipt and an issue for the same product, using that order for the issue. Reload the app and check that the order has left the waiting list.
+3. Select the product in **Inventory → Stock by location**. Confirm that **Activity history** shows the receipt as positive and the issue as negative.
+4. Open **Reports** to check overstock and slow-moving stock. The slow-moving report defaults to **18 October 2026**, the reference date for the team's SQL data. Open **Overview** to check the customer ranking.
+
 ## Data and API configuration
 
 This version uses browser-local storage. Entries persist under `warehouse.local.v3` on the current origin. A different hostname or port uses a separate storage area.
 
-API settings are defined in `frontend/src/config.js`. The default mode is `demo`, and the API address is `http://localhost:8080/api`, matching the team's Spring Boot backend. The backend currently provides Warehouse, Product, Supplier and Customer CRUD; the frontend's bootstrap, stock operations and report endpoints are not yet available. Keep local mode enabled until a complete loading and mutation contract is implemented. Local records are not automatically transferred to MySQL.
+API settings are defined in `frontend/src/config.js`. The default mode is `demo`, and the API address is `http://localhost:8080/api`, matching the team's Spring Boot backend. Enable HTTP mode once the backend provides `/api/bootstrap` and the report and mutation endpoints used by the application. Local records are not automatically transferred to MySQL.
 
 Local document version 5 adds zones, aisles and staff relationships. Loading version 3 or 4 first saves its original JSON under `<workspace-key>.schema-v3-backup` or `<workspace-key>.schema-v4-backup`. Missing zone/aisle records are derived from existing bin addresses, using the IDs as initial names. Existing quantities and identifiers are preserved. Legacy product values remain readable and must meet the new rules when edited; they are not silently rewritten.
 

@@ -1,4 +1,9 @@
 import { esc, storageName } from '../utils/format.js';
+import { localProductHistory } from '../domain/operation-reports.js';
+import {
+  reportContent,
+  reportDateLabel,
+} from '../components/operation-reports.js';
 export function createInventory({ config, ctx, selectors, ui }) {
   function inventory() {
     const num = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 3 })
@@ -38,6 +43,41 @@ export function createInventory({ config, ctx, selectors, ui }) {
           bins.get(s.binId)?.warehouseId === ctx.filters.warehouse) &&
         (!ctx.filters.product || s.productId === ctx.filters.product),
     );
+    const selected = products.get(ctx.filters.product);
+    const history =
+      '<section class="card">' +
+      ui.cardTitle(
+        'Activity history',
+        selected
+          ? esc(selected.id + ' · ' + selected.name)
+          : 'Select a product in Stock by location.',
+      ) +
+      (selected
+        ? reportContent(
+            ui,
+            ctx,
+            config,
+            'productHistory',
+            () =>
+              localProductHistory(
+                ctx.state,
+                selected.id,
+                (id) => bins.get(id)?.warehouseId ?? id,
+              ),
+            (items) =>
+              ui.table(
+                ['Date', 'Activity', 'Document', 'Quantity', 'Location'],
+                items
+                  .map(
+                    (r) =>
+                      `<tr><td>${reportDateLabel(r.activityDate)}</td><td>${esc(r.type)}</td><td>${esc(r.documentId)}</td><td class="number">${r.quantity > 0 ? '+' : ''}${num(r.quantity)} ${esc(selected.unit)}</td><td>${esc(r.location)}</td></tr>`,
+                  )
+                  .join(''),
+              ),
+            'No activity recorded for this product.',
+          )
+        : '') +
+      '</section>';
     return (
       ui.heading(
         'Inventory',
@@ -70,6 +110,7 @@ export function createInventory({ config, ctx, selectors, ui }) {
                   .join(''),
               )
       }<div class="table-footer">${rows.length} product–bin ${rows.length === 1 ? 'pair' : 'pairs'} · Quantities use each product's unit</div></section>` +
+      history +
       `<section class="card inventory-catalogue">${ui.cardTitle('Product catalogue · All warehouses', 'Search applies here; includes products with no stock yet.')} ${ui.table(
         [
           'Product ID',
