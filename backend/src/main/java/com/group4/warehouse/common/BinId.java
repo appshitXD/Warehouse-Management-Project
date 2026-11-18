@@ -14,6 +14,11 @@ public record BinId(String warehouseId, String zoneId, String aisleId, String po
 
     private static final String SEPARATOR = "|";
 
+    /** Same as parse(value, "Bin"). */
+    public static BinId parse(String value) {
+        return parse(value, "Bin");
+    }
+
     /** "W02|Z02|A02|B007" -> BinId. Throws 400 with a readable message if the format is wrong. */
     public static BinId parse(String value, String field) {
         String[] parts = value == null ? new String[0] : value.trim().split("\\|", -1);
