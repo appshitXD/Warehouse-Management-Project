@@ -22,7 +22,7 @@ public final class DatabaseErrors {
     private static final Logger log = LoggerFactory.getLogger(DatabaseErrors.class);
 
     // MySQL:   Check constraint 'ck_product_reorder' is violated.
-    // MariaDB: CONSTRAINT `ck_product_reorder` failed for `warehouse_db`.`product`
+    // MariaDB: CONSTRAINT `ck_product_reorder` failed for `WarehouseManagement`.`PRODUCT`
     private static final Pattern CHECK_NAME =
             Pattern.compile("(?:Check constraint '|CONSTRAINT `)(\\w+)");
 
