@@ -121,6 +121,12 @@ export function bindEvents({
     if (e.target.closest('#retry-pending')) void controller.retryPending();
     if (e.target.closest('#retry-reports')) void services.loadReports();
     if (e.target.closest('#retry-locations')) void services.loadLocations();
+    const reportRetry = e.target.closest('[data-retry-operation-report]');
+    if (reportRetry)
+      void services.loadOperationReport(
+        reportRetry.dataset.retryOperationReport,
+        true,
+      );
   });
   env.document.addEventListener('input', (e) => {
     if (e.target.id === 'search') {
@@ -161,6 +167,12 @@ export function bindEvents({
       ctx.filters.product = e.target.value;
       if (config.mode === 'http') void services.loadReports();
       else controller.render();
+    }
+    if (e.target.id === 'reports-as-of') {
+      if (e.target.value && e.target.validity.valid)
+        ctx.reportsAsOf = e.target.value;
+      controller.render();
+      $('#reports-as-of')?.focus();
     }
     if (e.target.id === 'inventory-product-filter') {
       ctx.filters.product = e.target.value;

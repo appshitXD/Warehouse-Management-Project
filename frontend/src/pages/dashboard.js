@@ -1,5 +1,7 @@
 import { icon } from '../components/navigation.js';
 import { documentCode, num, esc, date } from '../utils/format.js';
+import { localTopCustomers } from '../domain/operation-reports.js';
+import { reportContent } from '../components/operation-reports.js';
 export function createDashboard({ ctx, selectors, ui, config }) {
   function dashboard() {
     const occupied = ctx.state.bins.filter((b) =>
@@ -63,6 +65,34 @@ export function createDashboard({ ctx, selectors, ui, config }) {
       .slice(0, 5);
     const emptyPanel = (symbol, title, description) =>
       `<div class="overview-empty"><span class="overview-empty-icon" aria-hidden="true">${icon(symbol)}</span><strong>${title}</strong><p>${description}</p></div>`;
+    const topCustomers =
+      '<section class="card overview-top-customers">' +
+      ui.cardTitle('Top 10 customers', 'Ranked by units shipped.') +
+      reportContent(
+        ui,
+        ctx,
+        config,
+        'topCustomers',
+        () => localTopCustomers(ctx.state),
+        (items) => {
+          const ranked = [...items]
+            .sort((a, b) => b.unitsShipped - a.unitsShipped)
+            .slice(0, 10);
+          const max = ranked[0].unitsShipped || 1;
+          return (
+            '<ol class="customer-ranking card-body">' +
+            ranked
+              .map(
+                (row) =>
+                  `<li><div class="row-between"><strong>${esc(row.customerName)}</strong><span class="number">${num(row.unitsShipped)}</span></div><div class="progress-track" aria-hidden="true"><div class="progress-fill" style="width:${(row.unitsShipped / max) * 100}%"></div></div></li>`,
+              )
+              .join('') +
+            '</ol>'
+          );
+        },
+        'No units shipped yet.',
+      ) +
+      '</section>';
     return (
       '<div class="dashboard-overview">' +
       ui.heading(
@@ -120,7 +150,7 @@ export function createDashboard({ ctx, selectors, ui, config }) {
           'No warehouse locations yet',
           'Add warehouses and bins in Locations to see occupancy.',
         )
-      }<p class="info-note">Occupied locations, not storage capacity.</p></div></section><section class="card overview-activity">${ui.cardTitle('Recent activity', 'Latest recorded stock transactions.')}<div class="card-body">${events.map((e) => `<div class="activity"><span class="activity-icon">${icon(e.type === 'Goods receipts' ? 'receipts' : e.type === 'Goods issues' ? 'issues' : 'movements')}</span><div><p><strong>${e.type}</strong> · ${documentCode(e.id)}</p><small>${esc(e.detail)}${e.type === 'Stock movements' ? ' · ' + esc(selectors.staffName(e.staffId)) : ''}</small></div><time>${date(e.date)}</time></div>`).join('') || emptyPanel('movements', 'No stock activity yet', 'Recorded receipts, issues and transfers appear here.')}</div></section></div></div>`
+      }<p class="info-note">Occupied locations, not storage capacity.</p></div></section><section class="card overview-activity">${ui.cardTitle('Recent activity', 'Latest recorded stock transactions.')}<div class="card-body">${events.map((e) => `<div class="activity"><span class="activity-icon">${icon(e.type === 'Goods receipts' ? 'receipts' : e.type === 'Goods issues' ? 'issues' : 'movements')}</span><div><p><strong>${e.type}</strong> · ${documentCode(e.id)}</p><small>${esc(e.detail)}${e.type === 'Stock movements' ? ' · ' + esc(selectors.staffName(e.staffId)) : ''}</small></div><time>${date(e.date)}</time></div>`).join('') || emptyPanel('movements', 'No stock activity yet', 'Recorded receipts, issues and transfers appear here.')}</div></section>${topCustomers}</div></div>`
     );
   }
   return { dashboard };

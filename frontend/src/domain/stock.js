@@ -1,7 +1,7 @@
 import { validateCatalogue } from './catalogue.js';
-import { orderLabels } from '../config.js';
+import { httpOrderLabels, orderLabels } from '../config.js';
 import { num, round, now } from '../utils/format.js';
-export function createStock({ selectors, ctx, storage, env }) {
+export function createStock({ selectors, ctx, storage, env, config }) {
   function assert(condition, message) {
     if (!condition) throw new Error(message);
   }
@@ -61,7 +61,8 @@ export function createStock({ selectors, ctx, storage, env }) {
         ctx.state.customers.some((c) => c.id === payload.customerId),
         'Invalid customer.',
       );
-      assert(orderLabels[payload.status], 'Invalid order status.');
+      const labels = config.mode === 'http' ? httpOrderLabels : orderLabels;
+      assert(Object.hasOwn(labels, payload.status), 'Invalid order status.');
       if (old && ctx.state.issues.some((i) => i.orderId === old.id)) {
         assert(
           old.customerId === payload.customerId,

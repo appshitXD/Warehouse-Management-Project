@@ -1,6 +1,18 @@
 import { esc, date, time, documentCode, num } from '../utils/format.js';
-import { taskLabels, orderLabels } from '../config.js';
-export function createDirectories({ ctx, ui, selectors }) {
+import {
+  taskLabels,
+  orderLabels,
+  httpTaskLabels,
+  httpOrderLabels,
+} from '../config.js';
+import { localWaitingOrders } from '../domain/operation-reports.js';
+import {
+  reportContent,
+  reportDateLabel,
+} from '../components/operation-reports.js';
+export function createDirectories({ ctx, ui, selectors, config }) {
+  const orderStatuses = config.mode === 'http' ? httpOrderLabels : orderLabels;
+  const taskStatuses = config.mode === 'http' ? httpTaskLabels : taskLabels;
   const editButton = (type, id) =>
     '<button class="button quiet" data-operation="' +
     type +
@@ -113,7 +125,7 @@ export function createDirectories({ ctx, ui, selectors }) {
                 '</td><td>' +
                 esc(t.name) +
                 '</td><td>' +
-                ui.badge(taskLabels[t.status], 'gray') +
+                ui.badge(taskStatuses[t.status], 'gray') +
                 '</td></tr>',
             )
             .join(''),
@@ -151,8 +163,8 @@ export function createDirectories({ ctx, ui, selectors }) {
               : 'Date unavailable') +
             '</td><td>' +
             ui.badge(
-              orderLabels[o.status],
-              o.status === 'open' ? 'green' : 'gray',
+              orderStatuses[o.status],
+              ['open', 'Pending'].includes(o.status) ? 'green' : 'gray',
             ) +
             '</td><td>' +
             ctx.state.issues.filter((i) => i.orderId === o.id).length +
@@ -233,7 +245,30 @@ export function createDirectories({ ctx, ui, selectors }) {
             .join(''),
         ) +
         '</section>';
-    return html;
+    return (
+      html +
+      '<section class="card">' +
+      ui.cardTitle('Waiting to ship', 'Customer orders with no goods issue.') +
+      reportContent(
+        ui,
+        ctx,
+        config,
+        'waitingOrders',
+        () => localWaitingOrders(ctx.state, selectors.customerName),
+        (items) =>
+          ui.table(
+            ['Order ID', 'Customer', 'Date', 'Status'],
+            items
+              .map(
+                (r) =>
+                  `<tr><td>${esc(r.orderId)}</td><td>${esc(r.customerName)}</td><td>${reportDateLabel(r.time)}</td><td>${ui.badge(orderStatuses[r.status], 'gray')}</td></tr>`,
+              )
+              .join(''),
+          ),
+        'No orders waiting to ship.',
+      ) +
+      '</section>'
+    );
   }
 
   function suppliersPage() {

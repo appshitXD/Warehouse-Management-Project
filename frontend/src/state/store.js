@@ -1,3 +1,5 @@
+import { reportsAsOf } from '../config.js';
+
 export function initialState() {
   return {
     version: 5,
@@ -31,6 +33,8 @@ export function createStore() {
     stale: false,
     refreshError: '',
     remoteReports: null,
+    operationReports: new Map(),
+    reportsAsOf,
     reportsBusy: false,
     reportsError: '',
     reportsGeneration: 0,

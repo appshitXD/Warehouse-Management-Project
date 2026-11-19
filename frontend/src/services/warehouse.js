@@ -2,8 +2,25 @@ import {
   normalizeReports,
   normalizeLocations,
   normalizeBootstrap,
+  normalizeOverstock,
+  normalizeSlowMoving,
+  normalizeWaitingOrders,
+  normalizeTopCustomers,
+  normalizeProductHistory,
 } from '../api/contracts.js';
 import { endpoints } from '../config.js';
+
+const operationReports = {
+  overstock: ['/reports/overstock', normalizeOverstock],
+  waitingOrders: ['/orders/awaiting-issue', normalizeWaitingOrders],
+  topCustomers: ['/reports/top-customers', normalizeTopCustomers],
+};
+
+const routeReports = {
+  reports: ['overstock', 'slowMoving'],
+  orders: ['waitingOrders'],
+  dashboard: ['topCustomers'],
+};
 export function createServices({
   config,
   ctx,
@@ -13,6 +30,48 @@ export function createServices({
   storage,
   env,
 }) {
+  async function loadOperationReport(key, retry = false) {
+    const cache = ctx.operationReports;
+    if (config.mode !== 'http') return;
+    const productId = key === 'productHistory' ? ctx.filters.product : '';
+    if (key === 'productHistory' && !productId) return;
+    const asOf = ctx.reportsAsOf;
+    let endpoint = operationReports[key];
+    if (productId)
+      endpoint = [
+        '/products/' + encodeURIComponent(productId) + '/history',
+        (raw) => normalizeProductHistory(raw, productId),
+      ];
+    if (key === 'slowMoving')
+      endpoint = [
+        '/reports/slow-moving?' + new URLSearchParams({ asOf }),
+        (raw) => normalizeSlowMoving(raw, asOf),
+      ];
+    if (!endpoint) return;
+    const [path, normalize] = endpoint;
+    if (!retry && cache.get(key)?.path === path) return;
+    const pending = { path, productId, asOf };
+    cache.set(key, pending);
+    if (retry) controller.render();
+    try {
+      pending.items = normalize(await request(path));
+    } catch (error) {
+      pending.error = error.message;
+    }
+    const visible =
+      key === 'productHistory'
+        ? ctx.route === 'inventory' && ctx.filters.product === productId
+        : routeReports[ctx.route]?.includes(key);
+    if (visible && ctx.operationReports === cache && cache.get(key) === pending)
+      controller.render();
+  }
+
+  function loadRouteReports() {
+    for (const key of routeReports[ctx.route] || [])
+      void loadOperationReport(key);
+    if (ctx.route === 'inventory') void loadOperationReport('productHistory');
+  }
+
   async function loadReports() {
     if (config.mode !== 'http') return;
     const token = ++ctx.reportsGeneration;
@@ -101,6 +160,7 @@ export function createServices({
         ? normalizeBootstrap(await request('/bootstrap'))
         : storage.loadLocal();
     ctx.state = next;
+    ctx.operationReports = new Map();
     ctx.stale = false;
     ctx.refreshError = '';
     ctx.remoteReports = null;
@@ -158,5 +218,13 @@ export function createServices({
       ctx.editingId ? 'PATCH' : 'POST',
     );
   }
-  return { loadReports, loadLocations, reload, sendMutation, saveOperation };
+  return {
+    loadReports,
+    loadLocations,
+    loadOperationReport,
+    loadRouteReports,
+    reload,
+    sendMutation,
+    saveOperation,
+  };
 }

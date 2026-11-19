@@ -7,7 +7,6 @@ export const storageRequirements = [
 
 export const locationKey = (...parts) => parts.join('|');
 
-
 export function validateCatalogue(type, payload, ctx) {
   const collections = {
     product: 'products',

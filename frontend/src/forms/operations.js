@@ -4,7 +4,7 @@ import {
   presentFormErrors,
 } from './accessibility.js';
 import { esc, num } from '../utils/format.js';
-import { orderLabels } from '../config.js';
+import { httpOrderLabels, orderLabels } from '../config.js';
 import { storageRequirements, locationKey } from '../domain/catalogue.js';
 export function createForms({
   $,
@@ -15,7 +15,10 @@ export function createForms({
   selectors,
   controller,
   env,
+  config,
 }) {
+  const orderStatuses = config.mode === 'http' ? httpOrderLabels : orderLabels;
+  const initialOrderStatus = config.mode === 'http' ? 'Pending' : 'open';
   const field = (label, name, control, full = false) =>
     `<label class="field ${full ? 'full-width' : ''}"><span>${label}</span>${control}</label>`;
 
@@ -47,8 +50,11 @@ export function createForms({
     if (!ctx.state.bins.length) missing.push('bin');
     if (type === 'receipt' && !ctx.state.suppliers.length)
       missing.push('suppliers');
-    if (type === 'issue' && !ctx.state.orders.some((o) => o.status === 'open'))
-      missing.push('open customer orders');
+    if (
+      type === 'issue' &&
+      !ctx.state.orders.some((o) => o.status === initialOrderStatus)
+    )
+      missing.push('customer orders eligible for issue');
     return missing;
   }
 
@@ -411,13 +417,15 @@ export function createForms({
           'Status',
           'status',
           '<select name="status" required>' +
-            Object.entries(orderLabels)
+            Object.entries(orderStatuses)
               .map(
                 ([v, l]) =>
                   '<option value="' +
                   v +
                   '" ' +
-                  (v === (record?.status || 'open') ? 'selected' : '') +
+                  (v === (record?.status || initialOrderStatus)
+                    ? 'selected'
+                    : '') +
                   '>' +
                   l +
                   '</option>',
@@ -440,7 +448,9 @@ export function createForms({
                 'orderId',
                 select(
                   'orderId',
-                  ctx.state.orders.filter((o) => o.status === 'open'),
+                  ctx.state.orders.filter(
+                    (o) => o.status === initialOrderStatus,
+                  ),
                   (o) => o.id + ' · ' + selectors.customerName(o.customerId),
                 ),
               )
