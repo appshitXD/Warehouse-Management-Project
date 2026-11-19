@@ -8,23 +8,30 @@ Spring Boot REST API over a MySQL database. All SQL is written by hand with JDBC
 | | |
 |---|---|
 | JDK | 17 or newer |
-| Database | MySQL 8.0+ (MariaDB 10.6+ also works) |
+| Database | MySQL 8.0.16+ (the CHECK constraints in `warehouse.sql` need it) |
 | JDBC driver | MySQL Connector/J (downloaded by Maven, version managed by Spring Boot) |
 | Build tool | Maven wrapper (`./mvnw`), no install needed |
 
 ## Run it
 
 ```bash
-# 1. Create the database (re-runnable: it drops and recreates warehouse_db)
-mysql -u root -p < ../database/schema.sql
-mysql -u root -p < ../database/dev-seed.sql      # optional test rows
+# 1. Create the database WarehouseManagement: 20 tables + sample data.
+#    Re-runnable: it drops every table and creates it again.
+mysql -u root -p < ../database/warehouse.sql
 
 # 2. Start the API on http://localhost:8080
 ./mvnw spring-boot:run
 
 # 3. Check it
-curl http://localhost:8080/api/health            # {"db":"up","catalog":"warehouse_db"}
+curl http://localhost:8080/api/health            # {"db":"up","catalog":"WarehouseManagement"}
 ```
+
+`database/schema.sql` and `database/dev-seed.sql` are the old 7-table scripts and are
+no longer used by the app.
+
+On Linux, MySQL table names are case-sensitive and some older repositories use
+lower-case table names, so start MySQL there with `lower_case_table_names=1`.
+macOS and Windows need nothing.
 
 ## Connection settings
 
@@ -32,7 +39,7 @@ Read from environment variables, so nobody has to edit code or recompile:
 
 | Variable | Default |
 |---|---|
-| `DB_URL` | `jdbc:mysql://localhost:3306/warehouse_db` |
+| `DB_URL` | `jdbc:mysql://localhost:3306/WarehouseManagement` |
 | `DB_USER` | `root` |
 | `DB_PASSWORD` | *(empty)* |
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` |
@@ -81,19 +88,29 @@ Status: ✅ done · 🚧 planned (issue #3, same conventions)
 | Resource | Endpoints | JSON | Status |
 |---|---|---|---|
 | Warehouse | `/warehouses`, `/warehouses/{id}` | `{id, name, address}` | ✅ |
-| Zone | `/warehouses/{warehouseId}/zones`, `.../zones/{zoneId}` | `{warehouseId, id, name}` | 🚧 |
-| Aisle | `/warehouses/{w}/zones/{z}/aisles`, `.../aisles/{aisleId}` | `{warehouseId, zoneId, id, name}` | 🚧 |
-| Bin | `/warehouses/{w}/zones/{z}/aisles/{a}/bins`, `.../bins/{position}` | `{warehouseId, zoneId, aisleId, position, name}` | 🚧 |
-| Product | `/products`, `/products/{id}` | `{id, name, unit, storage, reorderLevel}` | 🚧 |
-| Supplier | `/suppliers`, `/suppliers/{id}` | `{id, name, phone, address}` | 🚧 |
-| Customer | `/customers`, `/customers/{id}` | `{id, name, phone, address}` | 🚧 |
+| Zone | `/zones`, `/warehouses/{w}/zones/{zoneId}` | `{warehouseId, id, name}` | ✅ |
+| Aisle | `/aisles`, `/warehouses/{w}/zones/{z}/aisles/{aisleId}` | `{warehouseId, zoneId, id, name}` | ✅ |
+| Bin | `/bins`, `/warehouses/{w}/zones/{z}/aisles/{a}/bins/{position}` | `{warehouseId, zoneId, aisleId, position, name}` | ✅ |
+| Product | `/products`, `/products/{id}` | `{id, name, unit, storage, reorderLevel}` | ✅ |
+| Supplier | `/suppliers`, `/suppliers/{id}` | `{id, name, phone, address}` | ✅ |
+| Customer | `/customers`, `/customers/{id}` | `{id, name, phone, address}` | ✅ |
+| Staff | `/staff`, `/staff/{id}` (STAFF + STAFF_PHONE in one transaction) | `{id, name, address, warehouseId, supervisorId, phones[]}` | 🚧 #16 |
+| Goods issue | `GET /issues`, `GET /issues/{id}/lines` | `{id, date, status, stateOfGood, orderId, customerId, customerName}` | 🚧 #16 |
+| Stock movement | `POST /movements` (one transaction) | `{productId, fromBinId, toBinId, quantity, staffId}` | 🚧 #16 |
+
+Formats shared with the frontend (`contracts.js`):
+- **Bin ID** is one string `W02|Z02|A02|B007` (warehouse|zone|aisle|position),
+  see `common/BinId.java`.
+- **Dates** are ISO 8601 with the time zone, e.g. `2026-10-12T00:00:00+07:00`,
+  see `common/IsoTime.java`.
+- Empty lists are `[]`, never `null`.
 
 Notes:
 - Zone, aisle and bin keys are **composite** (a bin is identified by warehouse + zone +
   aisle + position), so their URLs are nested. `GET /api/bins` will also list every bin
   for screens that need all of them at once.
 - All IDs are codes typed by the user (W01, Z01, A01, B001, P01, S01, C01):
-  letters, digits, `-` and `_`, max 40 characters. They cannot be changed after creation.
+  letters, digits, `-` and `_`, max 10 characters (VARCHAR(10) in `warehouse.sql`). They cannot be changed after creation.
 
 ### Warehouse examples
 
