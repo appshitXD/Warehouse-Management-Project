@@ -41,6 +41,23 @@ public class ReportService {
         return Map.of("items", repository.lowStock());
     }
 
+    public Map<String, Object> overstock() {
+        return Map.of("items", repository.overstock());
+    }
+
+    /** asOf is echoed back as YYYY-MM-DD: contracts.js checks it equals the date it asked for. */
+    public Map<String, Object> slowMoving(String asOf) {
+        LocalDate day = Dates.asOf(asOf);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("asOf", day.toString());
+        result.put("items", repository.slowMoving(day));
+        return result;
+    }
+
+    public Map<String, Object> topCustomers() {
+        return Map.of("items", repository.topCustomers());
+    }
+
     public Map<String, Object> movements(String from, String to, String productId, String asOf, String timezone) {
         ZoneId zone = Dates.zone(timezone);
         LocalDate day = Dates.asOf(asOf);

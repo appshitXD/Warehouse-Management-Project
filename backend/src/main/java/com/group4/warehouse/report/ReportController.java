@@ -26,6 +26,21 @@ public class ReportController {
         return service.lowStock();
     }
 
+    @GetMapping("/overstock")
+    public Map<String, Object> overstock() {
+        return service.overstock();
+    }
+
+    @GetMapping("/slow-moving")
+    public Map<String, Object> slowMoving(@RequestParam(required = false) String asOf) {
+        return service.slowMoving(asOf);
+    }
+
+    @GetMapping("/top-customers")
+    public Map<String, Object> topCustomers() {
+        return service.topCustomers();
+    }
+
     @GetMapping("/movements")
     public Map<String, Object> movements(@RequestParam(required = false) String from,
                                          @RequestParam(required = false) String to,
