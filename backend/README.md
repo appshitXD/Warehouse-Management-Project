@@ -16,7 +16,7 @@ Spring Boot REST API over a MySQL database. All SQL is written by hand with JDBC
 
 ```bash
 # 1. Create the database WarehouseManagement: 20 tables + sample data.
-#    Re-runnable: it drops every table and creates it again.
+#    Re-runnable: it drops the whole database (DROP DATABASE IF EXISTS) and builds it again.
 mysql -u root -p < ../database/warehouse.sql
 
 # 2. Start the API on http://localhost:8080
@@ -32,6 +32,17 @@ no longer used by the app.
 On Linux, MySQL table names are case-sensitive and some older repositories use
 lower-case table names, so start MySQL there with `lower_case_table_names=1`.
 macOS and Windows need nothing.
+
+## Tests
+
+```bash
+./mvnw test
+```
+
+Unit tests (no database needed) for the parts that are easy to get wrong: the bin ID
+format (`BinIdTest`), ISO dates (`IsoTimeTest`), the checks done before the stock-movement
+transaction (`StockMovementServiceTest`) and the staff rules: duplicate phones and
+supervision cycles (`StaffServiceTest`). `WarehouseApplicationTests` starts the whole app.
 
 ## Connection settings
 
@@ -50,10 +61,16 @@ Example: `DB_PASSWORD=secret ./mvnw spring-boot:run`
 
 ```
 com.group4.warehouse
-├── common/      error JSON, SQL-error translation, CORS
+├── common/      error JSON, SQL-error translation, CORS, BinId, IsoTime
 ├── health/      GET /api/health
 ├── warehouse/   Warehouse, Create/Update request, Repository (SQL), Service, Controller
 ├── zone/  aisle/  bin/  product/  supplier/  customer/   (same five-file pattern)
+├── staff/       Staff CRUD, STAFF + STAFF_PHONE in one transaction
+├── issue/       goods issues, master (GOODS_ISSUE) - detail (GOODS_ISSUE_LINE)
+├── movement/    POST /api/movements, 3 SQL statements in one transaction
+├── order/       orders waiting to ship
+├── report/      the report endpoints (/api/reports/...)
+└── bootstrap/   GET /api/bootstrap, every list the frontend needs in one call
 ```
 
 ## API conventions
@@ -83,7 +100,7 @@ com.group4.warehouse
 
 ## Endpoints
 
-Status: ✅ done · 🚧 planned (issue #3, same conventions)
+Status: ✅ done
 
 | Resource | Endpoints | JSON | Status |
 |---|---|---|---|
@@ -91,12 +108,17 @@ Status: ✅ done · 🚧 planned (issue #3, same conventions)
 | Zone | `/zones`, `/warehouses/{w}/zones/{zoneId}` | `{warehouseId, id, name}` | ✅ |
 | Aisle | `/aisles`, `/warehouses/{w}/zones/{z}/aisles/{aisleId}` | `{warehouseId, zoneId, id, name}` | ✅ |
 | Bin | `/bins`, `/warehouses/{w}/zones/{z}/aisles/{a}/bins/{position}` | `{warehouseId, zoneId, aisleId, position, name}` | ✅ |
-| Product | `/products`, `/products/{id}` | `{id, name, unit, storage, reorderLevel}` | ✅ |
+| Product | `/products`, `/products/{id}`, `GET /products/{id}/history` | `{id, name, unit, storage, reorderLevel}` | ✅ |
 | Supplier | `/suppliers`, `/suppliers/{id}` | `{id, name, phone, address}` | ✅ |
 | Customer | `/customers`, `/customers/{id}` | `{id, name, phone, address}` | ✅ |
-| Staff | `/staff`, `/staff/{id}` (STAFF + STAFF_PHONE in one transaction) | `{id, name, address, warehouseId, supervisorId, phones[]}` | 🚧 #16 |
-| Goods issue | `GET /issues`, `GET /issues/{id}/lines` | `{id, date, status, stateOfGood, orderId, customerId, customerName}` | 🚧 #16 |
-| Stock movement | `POST /movements` (one transaction) | `{productId, fromBinId, toBinId, quantity, staffId}` | 🚧 #16 |
+| Staff | `/staff`, `/staff/{id}` (STAFF + STAFF_PHONE in one transaction) | `{id, name, address, warehouseId, supervisorId, phone, phones[]}` | ✅ |
+| Goods issue | `GET /issues`, `GET /issues/{id}`, `GET /issues/{id}/lines` | `{id, date, status, stateOfGood, orderId, customerId, customerName}` | ✅ |
+| Stock movement | `POST /movements` (one transaction) | `{productId, fromBinId, toBinId, quantity, staffId}` | ✅ |
+| Order | `GET /orders/awaiting-issue` | `{items: [{orderId, time, status, customerName}]}` | ✅ |
+| Bootstrap | `GET /bootstrap` | one object with every list the frontend shows | ✅ |
+| Reports | `GET /reports/product-locations`, `low-stock`, `movements`, `empty-bins`, `latest-count-differences`, `overstock`, `slow-moving?asOf=`, `top-customers` | `{items: [...]}` (+ `from`/`to`/`asOf`) | ✅ |
+
+Saving orders, tasks, receipts, issues and counts is not part of the brief, so those are read-only.
 
 Formats shared with the frontend (`contracts.js`):
 - **Bin ID** is one string `W02|Z02|A02|B007` (warehouse|zone|aisle|position),

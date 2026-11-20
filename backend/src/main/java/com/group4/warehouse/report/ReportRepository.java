@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -100,6 +101,109 @@ public class ReportRepository {
                 row.put("unit", rs.getString("Unit"));
                 row.put("totalQuantity", rs.getInt("Total_Quantity"));
                 row.put("reorderLevel", rs.getInt("Reorder_Level"));
+                result.add(row);
+            }
+            return result;
+        } catch (SQLException e) {
+            throw DatabaseErrors.translate(e, "report");
+        }
+    }
+
+    /**
+     * Query 15: products holding at least 3 times their reorder level.
+     * The aggregation of the PRODUCT_STOCK view in queries.sql is written inline here,
+     * because warehouse.sql does not create that view.
+     */
+    public List<Map<String, Object>> overstock() {
+        String sql = "SELECT p.Product_ID, p.Product_Name, p.Unit, p.Reorder_Level,"
+                + "       COALESCE(SUM(pb.Quantity), 0)   AS Total_Qty,"
+                + "       COUNT(DISTINCT pb.Warehouse_ID) AS Num_Warehouses"
+                + " FROM PRODUCT p"
+                + " LEFT JOIN PRODUCT_BIN pb ON pb.Product_ID = p.Product_ID"
+                + " GROUP BY p.Product_ID, p.Product_Name, p.Unit, p.Reorder_Level"
+                + " HAVING COALESCE(SUM(pb.Quantity), 0) >= 3 * p.Reorder_Level"
+                + " ORDER BY Total_Qty / p.Reorder_Level DESC, p.Product_ID";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            List<Map<String, Object>> result = new ArrayList<>();
+            while (rs.next()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("productId", rs.getString("Product_ID"));
+                row.put("productName", rs.getString("Product_Name"));
+                row.put("unit", rs.getString("Unit"));
+                row.put("reorderLevel", rs.getInt("Reorder_Level"));
+                row.put("totalQuantity", rs.getInt("Total_Qty"));
+                row.put("numWarehouses", rs.getInt("Num_Warehouses"));
+                result.add(row);
+            }
+            return result;
+        } catch (SQLException e) {
+            throw DatabaseErrors.translate(e, "report");
+        }
+    }
+
+    /**
+     * Query 13: products in stock with no goods issue in the 90 days up to asOf.
+     * NOT EXISTS = "no issue line for this product in that window". The window is closed at
+     * asOf too, so an issue dated after the chosen day does not hide the product.
+     */
+    public List<Map<String, Object>> slowMoving(LocalDate asOf) {
+        String sql = "SELECT p.Product_ID, p.Product_Name, SUM(pb.Quantity) AS On_Hand"
+                + " FROM PRODUCT p"
+                + " JOIN PRODUCT_BIN pb ON pb.Product_ID = p.Product_ID"
+                + " WHERE pb.Quantity > 0"
+                + "   AND NOT EXISTS ("
+                + "       SELECT 1"
+                + "       FROM GOODS_ISSUE gi"
+                + "       JOIN GOODS_ISSUE_LINE gil ON gil.Issue_ID = gi.Issue_ID"
+                + "       WHERE gil.Product_ID = p.Product_ID"
+                + "         AND gi.Issue_Date >= DATE_SUB(?, INTERVAL 90 DAY)"
+                + "         AND gi.Issue_Date <= ?)"
+                + " GROUP BY p.Product_ID, p.Product_Name"
+                + " ORDER BY On_Hand DESC, p.Product_ID";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, asOf);
+            ps.setObject(2, asOf);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<Map<String, Object>> result = new ArrayList<>();
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("productId", rs.getString("Product_ID"));
+                    row.put("productName", rs.getString("Product_Name"));
+                    row.put("onHand", rs.getInt("On_Hand"));
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (SQLException e) {
+            throw DatabaseErrors.translate(e, "report");
+        }
+    }
+
+    /** Query 7: the 10 customers who received the most units (customer -> order -> issue -> line). */
+    public List<Map<String, Object>> topCustomers() {
+        String sql = "SELECT c.Customer_ID, c.Name AS Customer_Name, SUM(gil.Quantity) AS Units_Shipped"
+                + " FROM CUSTOMER c"
+                + " JOIN CUSTOMER_ORDER co    ON co.Customer_ID = c.Customer_ID"
+                + " JOIN GOODS_ISSUE gi       ON gi.Order_ID    = co.Order_ID"
+                + " JOIN GOODS_ISSUE_LINE gil ON gil.Issue_ID   = gi.Issue_ID"
+                + " GROUP BY c.Customer_ID, c.Name"
+                + " ORDER BY Units_Shipped DESC, c.Customer_ID"
+                + " LIMIT 10";
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            List<Map<String, Object>> result = new ArrayList<>();
+            while (rs.next()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("customerId", rs.getString("Customer_ID"));
+                row.put("customerName", rs.getString("Customer_Name"));
+                row.put("unitsShipped", rs.getInt("Units_Shipped"));
                 result.add(row);
             }
             return result;

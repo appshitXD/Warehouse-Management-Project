@@ -2,6 +2,7 @@ package com.group4.warehouse.product;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -22,6 +23,7 @@ import jakarta.validation.Valid;
  *
  *   GET    /api/products?q=laptop  list / search      200
  *   GET    /api/products/{id}      one product        200 | 404
+ *   GET    /api/products/{id}/history  receipts, issues, movements  200 | 404
  *   POST   /api/products           create             201 | 400 | 409
  *   PATCH  /api/products/{id}      partial update     200 | 400 | 404
  *   DELETE /api/products/{id}      delete             204 | 404 | 409 (still stored in a bin / used in documents)
@@ -31,9 +33,11 @@ import jakarta.validation.Valid;
 public class ProductController {
 
     private final ProductService service;
+    private final ProductHistoryRepository history;
 
-    public ProductController(ProductService service) {
+    public ProductController(ProductService service, ProductHistoryRepository history) {
         this.service = service;
+        this.history = history;
     }
 
     @GetMapping
@@ -44,6 +48,16 @@ public class ProductController {
     @GetMapping("/{id}")
     public Product get(@PathVariable String id) {
         return service.get(id);
+    }
+
+    /**
+     * Receipts, issues and movements of one product, oldest first.
+     * The product is looked up first: unknown ID -> 404, known product with no activity -> items [].
+     */
+    @GetMapping("/{id}/history")
+    public Map<String, Object> history(@PathVariable String id) {
+        Product product = service.get(id);
+        return Map.of("productId", product.id(), "items", history.findByProduct(product.id()));
     }
 
     @PostMapping
