@@ -183,6 +183,7 @@ export function createDirectories({ ctx, ui, selectors, config }) {
               ? '<td class="row-actions">' +
                 viewButton(o.id) +
                 editButton('order', o.id) +
+                ui.documentActions('order', o.id, { edit: false }) +
                 '</td>'
               : '') +
             '</tr>',

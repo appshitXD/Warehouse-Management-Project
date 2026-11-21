@@ -288,10 +288,17 @@ export function createServices({
           : { name: payload.name };
       return sendMutation(path, body, method);
     }
+    // An order's ID cannot change: PATCH /orders/{id} only takes time, status and customerId.
+    const body =
+      deleting || !payload
+        ? undefined
+        : method === 'PATCH' && type === 'order'
+          ? { customerId: payload.customerId, status: payload.status }
+          : payload;
     return sendMutation(
       endpoints[type] +
         (ctx.editingId ? '/' + encodeURIComponent(ctx.editingId) : ''),
-      deleting ? undefined : payload,
+      body,
       method,
     );
   }

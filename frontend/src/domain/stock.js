@@ -26,7 +26,11 @@ export function createStock({ selectors, ctx, storage, env, config }) {
         payload.confirmId === ctx.editingId,
         'Enter the record ID to confirm deletion.',
       );
-      validateDeletion(type.slice(7), ctx.editingId);
+      // Documents, orders and tasks: the backend decides (status rules, stock, foreign keys).
+      if (
+        !['receipt', 'issue', 'count', 'order', 'task'].includes(type.slice(7))
+      )
+        validateDeletion(type.slice(7), ctx.editingId);
       return;
     }
     if (validateCatalogue(type, payload, ctx)) {
@@ -91,6 +95,7 @@ export function createStock({ selectors, ctx, storage, env, config }) {
       );
       return;
     }
+    if (!payload.lines) return; // status-only change of a shipped issue
     assert(payload.lines.length, 'At least one line is required.');
     const balances = new Map(),
       seen = new Set();
@@ -105,7 +110,8 @@ export function createStock({ selectors, ctx, storage, env, config }) {
           );
           seen.add(key);
         }
-        if (type === 'issue') {
+        // A Pending issue does not take stock yet, so availability is only checked when shipping.
+        if (type === 'issue' && payload.status !== 'Pending') {
           const available = balances.has(key)
             ? balances.get(key)
             : selectors.quantity(l.productId, l.binId);

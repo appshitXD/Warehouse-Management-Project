@@ -44,7 +44,14 @@ Include this origin in the backend's `CORS_ORIGINS` when using a custom port or 
 
 ## Working with inventory
 
-In **Locations**, create a warehouse, a zone, an aisle and a bin in that order. Use **Stock movements** to transfer inventory between bins. Receipt, issue, count, task and order records are read-only in HTTP mode.
+In **Locations**, create a warehouse, a zone, an aisle and a bin in that order. Use **Stock movements** to transfer inventory between bins.
+
+Goods receipts, goods issues, stock counts, customer orders and tasks can be created, edited and deleted in HTTP mode. The backend applies the stock rules:
+
+- **Goods receipt:** saving adds its lines to stock; editing changes stock by the difference; deleting takes the stock back out (refused if it has already left the bin).
+- **Goods issue:** stock leaves when the status becomes Shipped or Completed. Pending issues can be edited or deleted; a shipped issue can only move on to Completed.
+- **Stock count:** stock is set to the counted quantities when the count becomes Completed. Pending counts can be deleted; Completed counts are locked.
+- **Tasks:** changing the status on a task card saves it straight away.
 
 Staff records belong to a warehouse and can have a supervisor and multiple phone numbers. Supervisor cycles and duplicate phone numbers within one staff record are rejected. Existing staff without a warehouse remain visible as **Not assigned** until updated.
 

@@ -41,7 +41,9 @@ export function bindEvents({
         $('#form-dialog').close();
         await controller.afterWrite(
           ctx.operation === 'count'
-            ? 'Stock count recorded and stock adjusted.'
+            ? payload.status && payload.status !== 'Completed'
+              ? 'Stock count saved. Stock changes when it is Completed.'
+              : 'Stock count recorded and stock adjusted.'
             : ctx.operation.startsWith('delete-')
               ? 'Record deleted.'
               : 'Saved successfully.',
@@ -78,8 +80,11 @@ export function bindEvents({
   });
   env.document.addEventListener('click', (e) => {
     const action = e.target.closest('[data-operation]');
-    if (action)
+    if (action) {
       forms.openOperation(action.dataset.operation, action.dataset.edit || '');
+      // An Edit/Delete button inside a selectable row must not also select the row.
+      return;
+    }
     if (e.target.closest('#add-staff-phone')) {
       forms.clearErrors();
       $('#staff-phone-list').insertAdjacentHTML('beforeend', forms.phoneForm());
@@ -195,6 +200,40 @@ export function bindEvents({
       ctx.filters.product = e.target.value;
       if (config.mode === 'http') void services.loadLocations();
       else controller.render();
+    }
+    // HTTP mode: changing a task's status saves it straight away (PATCH /tasks/{id}).
+    if (config.mode === 'http' && e.target.dataset.task) {
+      const id = e.target.dataset.task,
+        status = e.target.value;
+      if (
+        ctx.refreshing ||
+        ctx.stale ||
+        ctx.pendingMutation ||
+        ctx.submitting
+      ) {
+        controller.render();
+        controller.notify(
+          'Refresh the data or confirm the pending request first.',
+        );
+        return;
+      }
+      e.target.disabled = true;
+      ctx.submitting = true;
+      try {
+        await services.sendMutation(
+          '/tasks/' + encodeURIComponent(id),
+          { status },
+          'PATCH',
+        );
+        ctx.submitting = false;
+        await controller.afterWrite('Task updated.');
+      } catch (error) {
+        controller.notify(error.message);
+      } finally {
+        ctx.submitting = false;
+        controller.render();
+      }
+      return;
     }
     if (config.mode === 'demo' && e.target.dataset.task) {
       const id = e.target.dataset.task,
