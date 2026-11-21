@@ -76,6 +76,41 @@ const mapRows = (d, name, map) =>
     map(object(r, `${name}[${i}]`), `${name}[${i}]`),
   );
 
+export function normalizeIssueList(raw) {
+  return mapRows({ items: raw }, 'items', (r, at) => ({
+    id: id(r.id, at + '.id'),
+    date: timestamp(r.date, at + '.date'),
+    orderId: id(r.orderId, at + '.orderId'),
+    customerName: text(r.customerName, at + '.customerName'),
+    status: text(r.status, at + '.status'),
+    stateOfGood: r.stateOfGood ?? '',
+  }));
+}
+
+export function normalizeIssueLines(raw, issueId) {
+  return mapRows({ items: raw }, 'items', (r, at) => {
+    if (id(r.issueId, at + '.issueId') !== issueId)
+      fail('Issue lines differ from the selected issue.');
+    return {
+      id: id(r.id, at + '.id'),
+      productId: id(r.productId, at + '.productId'),
+      productName: text(r.productName, at + '.productName'),
+      unit: text(r.unit, at + '.unit'),
+      binId: id(r.binId, at + '.binId'),
+      quantity: positive(r.quantity, at + '.quantity'),
+    };
+  });
+}
+
+export function normalizeCustomers(raw) {
+  return mapRows({ items: raw }, 'items', (r, at) => ({
+    id: id(r.id, at + '.id'),
+    name: text(r.name, at + '.name'),
+    phone: r.phone ?? '',
+    address: r.address ?? '',
+  }));
+}
+
 function reportDate(value, at) {
   const result = text(value, at).replace(' ', 'T');
   const day = result.slice(0, 10);

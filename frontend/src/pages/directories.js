@@ -4,6 +4,8 @@ import {
   orderLabels,
   httpTaskLabels,
   httpOrderLabels,
+  canWrite,
+  showOperationReport,
 } from '../config.js';
 import { localWaitingOrders } from '../domain/operation-reports.js';
 import {
@@ -14,11 +16,13 @@ export function createDirectories({ ctx, ui, selectors, config }) {
   const orderStatuses = config.mode === 'http' ? httpOrderLabels : orderLabels;
   const taskStatuses = config.mode === 'http' ? httpTaskLabels : taskLabels;
   const editButton = (type, id) =>
-    '<button class="button quiet" data-operation="' +
-    type +
-    '" data-edit="' +
-    esc(id) +
-    '">Edit</button>';
+    !canWrite(config, type)
+      ? ''
+      : '<button class="button quiet" data-operation="' +
+        type +
+        '" data-edit="' +
+        esc(id) +
+        '">Edit</button>';
 
   const viewButton = (id) =>
     '<button class="button quiet" data-detail="' +
@@ -41,6 +45,7 @@ export function createDirectories({ ctx, ui, selectors, config }) {
     const isStaff = type === 'staff',
       rows = ctx.state[isStaff ? 'staff' : 'customers'],
       selected = rows.find((p) => p.id === ctx.filters.detail);
+    const remoteSearch = !isStaff && config.mode === 'http';
     const title = isStaff ? 'Staff' : 'Customers';
     let html =
       ui.heading(
@@ -53,9 +58,12 @@ export function createDirectories({ ctx, ui, selectors, config }) {
       '<section class="card directory-card">' +
       ui.cardTitle(title + ' directory', 'Profiles and related records.') +
       directorySearch(
-        'Search ID, name, phone or address…',
+        remoteSearch
+          ? 'Search customer ID or name…'
+          : 'Search ID, name, phone or address…',
         isStaff ? ui.warehouseFilter() : '',
-      ) +
+      );
+    const renderRows = (people) =>
       ui.table(
         [
           'ID',
@@ -66,8 +74,7 @@ export function createDirectories({ ctx, ui, selectors, config }) {
           isStaff ? 'Tasks' : 'Orders',
           'Actions',
         ],
-        rows
-          .filter(selectors.personMatches)
+        people
           .filter(
             (p) =>
               !isStaff ||
@@ -104,8 +111,11 @@ export function createDirectories({ ctx, ui, selectors, config }) {
               '</td></tr>',
           )
           .join(''),
-      ) +
-      '</section>';
+      );
+    html +=
+      (remoteSearch
+        ? ui.directoryContent('customers', 'customers', renderRows)
+        : renderRows(rows.filter(selectors.personMatches))) + '</section>';
     if (selected) {
       html +=
         '<section class="card">' +
@@ -245,6 +255,7 @@ export function createDirectories({ ctx, ui, selectors, config }) {
             .join(''),
         ) +
         '</section>';
+    if (!showOperationReport(config, 'waitingOrders')) return html;
     return (
       html +
       '<section class="card">' +

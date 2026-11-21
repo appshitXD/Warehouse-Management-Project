@@ -1,6 +1,7 @@
 import { icon } from './navigation.js';
 import { esc } from '../utils/format.js';
-export function createUi({ ctx }) {
+import { canWrite } from '../config.js';
+export function createUi({ ctx, config }) {
   const badge = (label, color = 'green') =>
     `<span class="pill ${color}">${esc(label)}</span>`;
 
@@ -45,10 +46,12 @@ export function createUi({ ctx }) {
   }
 
   function actionButton(type, label, variant = 'primary') {
+    if (!canWrite(config, type)) return '';
     return `<button class="button ${variant}" data-operation="${type}">${icon('plus')} ${label}</button>`;
   }
 
   function recordActions(type, id) {
+    if (!canWrite(config, type)) return '';
     return `<div class="record-actions"><button class="button quiet" data-operation="${type}" data-edit="${esc(id)}" aria-label="Edit ${type} ${esc(id)}">Edit</button><button class="button quiet danger" data-operation="delete-${type}" data-edit="${esc(id)}" aria-label="Delete ${type} ${esc(id)}">Delete</button></div>`;
   }
 
@@ -74,6 +77,23 @@ export function createUi({ ctx }) {
       esc(message) +
       '</span></section>'
     );
+  }
+
+  function directoryContent(key, label, renderRows) {
+    const entry = ctx.remoteDirectories.get(key);
+    const selection =
+      key === 'issueLines' ? ctx.filters.detail : ctx.filters.search.trim();
+    if (entry?.selection !== selection)
+      return loadingState('Loading ' + label + '…');
+    if (entry?.error)
+      return emptyState(
+        'Unable to load ' + label,
+        entry.error,
+        `<button class="button secondary" data-retry-directory="${key}">Retry</button>`,
+      );
+    return entry?.items
+      ? renderRows(entry.items)
+      : loadingState('Loading ' + label + '…');
   }
 
   function statusBanner() {
@@ -113,6 +133,7 @@ export function createUi({ ctx }) {
     cardTitle,
     emptyState,
     loadingState,
+    directoryContent,
     statusBanner,
   };
 }

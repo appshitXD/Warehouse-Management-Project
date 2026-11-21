@@ -33,6 +33,7 @@ export function createStore() {
     stale: false,
     refreshError: '',
     remoteReports: null,
+    remoteDirectories: new Map(),
     operationReports: new Map(),
     reportsAsOf,
     reportsBusy: false,

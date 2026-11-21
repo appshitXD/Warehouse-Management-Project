@@ -4,7 +4,7 @@ import {
   presentFormErrors,
 } from './accessibility.js';
 import { esc, num } from '../utils/format.js';
-import { httpOrderLabels, orderLabels } from '../config.js';
+import { canWrite, httpOrderLabels, orderLabels } from '../config.js';
 import { storageRequirements, locationKey } from '../domain/catalogue.js';
 export function createForms({
   $,
@@ -172,6 +172,7 @@ export function createForms({
   }
 
   function openOperation(type, id = '') {
+    if (!canWrite(config, type)) return false;
     if (ctx.submitting || ctx.refreshing || ctx.stale || ctx.pendingMutation) {
       controller.notify(
         ctx.pendingMutation
@@ -470,7 +471,7 @@ export function createForms({
         'To bin',
         'toBinId',
         select('toBinId', ctx.state.bins, (b) => selectors.binName(b.id)),
-      )}${field('Quantity', 'quantity', input('quantity', 'number', 'min="0.001" step="0.001" value="1"'))}${field(
+      )}${field('Quantity', 'quantity', input('quantity', 'number', config.mode === 'http' ? 'min="1" step="1" value="1"' : 'min="0.001" step="0.001" value="1"'))}${field(
         'Performed by',
         'staffId',
         select('staffId', ctx.state.staff, (s) => s.name),

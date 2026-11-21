@@ -7,8 +7,11 @@ import {
   normalizeWaitingOrders,
   normalizeTopCustomers,
   normalizeProductHistory,
+  normalizeIssueList,
+  normalizeIssueLines,
+  normalizeCustomers,
 } from '../api/contracts.js';
-import { endpoints } from '../config.js';
+import { canWrite, endpoints, showOperationReport } from '../config.js';
 
 const operationReports = {
   overstock: ['/reports/overstock', normalizeOverstock],
@@ -32,7 +35,7 @@ export function createServices({
 }) {
   async function loadOperationReport(key, retry = false) {
     const cache = ctx.operationReports;
-    if (config.mode !== 'http') return;
+    if (config.mode !== 'http' || !showOperationReport(config, key)) return;
     const productId = key === 'productHistory' ? ctx.filters.product : '';
     if (key === 'productHistory' && !productId) return;
     const asOf = ctx.reportsAsOf;
@@ -70,6 +73,60 @@ export function createServices({
     for (const key of routeReports[ctx.route] || [])
       void loadOperationReport(key);
     if (ctx.route === 'inventory') void loadOperationReport('productHistory');
+  }
+
+  async function loadDirectory(key, { retry = false, debounce = false } = {}) {
+    if (config.mode !== 'http') return;
+    const cache = ctx.remoteDirectories;
+    const issueId = ctx.filters.detail;
+    const query = ctx.filters.search.trim();
+    const paths = {
+      customers: '/customers',
+      issues: '/issues',
+      issueLines: issueId
+        ? '/issues/' + encodeURIComponent(issueId) + '/lines'
+        : '',
+    };
+    const base = paths[key];
+    if (!base) return;
+    const path =
+      base +
+      (query && key !== 'issueLines'
+        ? '?' + new URLSearchParams({ q: query })
+        : '');
+    if (!retry && cache.get(key)?.path === path) return;
+    const entry = { path, selection: key === 'issueLines' ? issueId : query };
+    cache.set(key, entry);
+    if (retry || debounce) controller.render();
+    if (debounce) await new Promise((resolve) => env.setTimeout(resolve, 250));
+    const current = () =>
+      ctx.remoteDirectories === cache &&
+      cache.get(key) === entry &&
+      ctx.route === (key === 'customers' ? 'customers' : 'issues');
+    if (!current()) {
+      if (cache.get(key) === entry) cache.delete(key);
+      return;
+    }
+    try {
+      const raw = await request(path);
+      entry.items =
+        key === 'customers'
+          ? normalizeCustomers(raw)
+          : key === 'issues'
+            ? normalizeIssueList(raw)
+            : normalizeIssueLines(raw, issueId);
+    } catch (error) {
+      entry.error = error.message;
+    }
+    if (current()) controller.render();
+  }
+
+  function loadRouteDirectory() {
+    if (ctx.route === 'customers') void loadDirectory('customers');
+    if (ctx.route === 'issues') {
+      void loadDirectory('issues');
+      if (ctx.filters.detail) void loadDirectory('issueLines');
+    }
   }
 
   async function loadReports() {
@@ -161,6 +218,7 @@ export function createServices({
         : storage.loadLocal();
     ctx.state = next;
     ctx.operationReports = new Map();
+    ctx.remoteDirectories = new Map();
     ctx.stale = false;
     ctx.refreshError = '';
     ctx.remoteReports = null;
@@ -197,25 +255,44 @@ export function createServices({
   }
 
   function saveOperation(payload) {
-    if (
-      ['zone', 'aisle', 'delete-zone', 'delete-aisle'].includes(ctx.operation)
-    )
-      throw new Error(
-        'Zone and aisle APIs are not available in the current backend. Use local mode until these endpoints are implemented.',
-      );
-    if (ctx.operation.startsWith('delete-'))
-      return sendMutation(
-        endpoints[ctx.operation.slice(7)] +
+    const operation = ctx.operation;
+    if (!canWrite(config, operation))
+      throw new Error('This operation is read-only.');
+    const deleting = operation.startsWith('delete-');
+    const type = operation.replace(/^delete-/, '');
+    const method = deleting ? 'DELETE' : ctx.editingId ? 'PATCH' : 'POST';
+    if (['zone', 'aisle', 'bin'].includes(type)) {
+      const [warehouseId, zoneId, aisleId, position] = (
+        ctx.editingId || payload.id
+      )
+        .split('|')
+        .map(encodeURIComponent);
+      let path = '/warehouses/' + warehouseId + '/zones';
+      if (type !== 'zone') path += '/' + zoneId + '/aisles';
+      if (type === 'bin') path += '/' + aisleId + '/bins';
+      if (method !== 'POST')
+        path +=
           '/' +
-          encodeURIComponent(ctx.editingId),
-        undefined,
-        'DELETE',
-      );
+          (type === 'zone' ? zoneId : type === 'aisle' ? aisleId : position);
+      const key = type === 'bin' ? 'position' : 'id';
+      const code =
+        type === 'zone'
+          ? payload?.zoneId
+          : type === 'aisle'
+            ? payload?.aisleId
+            : payload?.position;
+      const body = deleting
+        ? undefined
+        : method === 'POST'
+          ? { [key]: code, name: payload.name }
+          : { name: payload.name };
+      return sendMutation(path, body, method);
+    }
     return sendMutation(
-      endpoints[ctx.operation] +
+      endpoints[type] +
         (ctx.editingId ? '/' + encodeURIComponent(ctx.editingId) : ''),
-      payload,
-      ctx.editingId ? 'PATCH' : 'POST',
+      deleting ? undefined : payload,
+      method,
     );
   }
   return {
@@ -223,6 +300,8 @@ export function createServices({
     loadLocations,
     loadOperationReport,
     loadRouteReports,
+    loadRouteDirectory,
+    loadDirectory,
     reload,
     sendMutation,
     saveOperation,

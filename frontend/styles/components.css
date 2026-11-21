@@ -1509,3 +1509,10 @@ main > .toolbar {
 .phone-row .remove-staff-phone {
   flex-shrink: 0;
 }
+.issue-row[data-issue] {
+  cursor: pointer;
+}
+
+.issue-row:has([aria-pressed='true']) td {
+  font-weight: 600;
+}

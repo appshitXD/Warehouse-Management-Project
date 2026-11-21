@@ -6,12 +6,12 @@ Built with HTML, CSS and JavaScript ES modules. The application runs without a f
 
 ## Features
 
-- **Overview** — stock indicators, replenishment alerts, bin occupancy, recent activity and the top 10 customers by units shipped.
-- **Inventory** — product catalogue, stock by location, search, filters, CSV export and activity history for the selected product.
-- **Stock operations** — supplier receipts, issues against customer orders, bin-to-bin transfers and stock counts with discrepancy tracking.
+- **Overview** — stock indicators, replenishment alerts, bin occupancy and recent activity.
+- **Inventory** — product catalogue, stock by location, search, filters and CSV export.
+- **Stock operations** — receipt and count history, goods issue details and bin-to-bin transfers.
 - **Locations** — warehouse, zone, aisle and bin organisation.
-- **Directories and assignments** — suppliers, staff, customers, orders waiting to ship and tasks.
-- **Reports** — low stock, overstock, slow-moving stock, movement history, bins empty throughout the previous week and latest count differences.
+- **Directories and assignments** — suppliers, staff, customers, orders and tasks.
+- **Reports** — low stock, movement history, bins empty throughout the previous week and latest count differences.
 
 ## Getting started
 
@@ -23,6 +23,8 @@ npm start
 ```
 
 Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Stop the server with `Ctrl+C`.
+
+Start the Spring Boot API and MySQL using the [backend setup guide](../backend/README.md). The frontend connects to `http://localhost:8080/api` by default. Check `GET /api/health` for `"db":"up"` before opening the frontend.
 
 ### VS Code Live Server
 
@@ -38,33 +40,27 @@ npm start
 ```
 
 The application will be available at `http://127.0.0.1:5174`.
+Include this origin in the backend's `CORS_ORIGINS` when using a custom port or Live Server.
 
 ## Working with inventory
 
-New workspaces start empty. In **Locations**, create a warehouse, a zone, an aisle and a bin in that order. Add a product and supplier before recording a goods receipt.
-
-Goods issues require an open customer order. Transfers and task assignments require a staff record. Saving a stock count adjusts the quantity and retains the recorded-versus-counted difference.
+In **Locations**, create a warehouse, a zone, an aisle and a bin in that order. Use **Stock movements** to transfer inventory between bins. Receipt, issue, count, task and order records are read-only in HTTP mode.
 
 Staff records belong to a warehouse and can have a supervisor and multiple phone numbers. Supervisor cycles and duplicate phone numbers within one staff record are rejected. Existing staff without a warehouse remain visible as **Not assigned** until updated.
 
 Product rules follow the current backend: IDs use up to 10 letters, digits, underscores or hyphens; names use up to 100 characters; reorder levels are positive integers. Storage requirements are **Ambient**, **Dry Ambient**, **Cold** or **Hazardous**.
 
-### Reviewing the operational reports
+### Reviewing the frontend against MySQL
 
-1. Create a customer order and confirm it appears in **Customer Orders → Waiting to ship**.
-2. Record a receipt and an issue for the same product, using that order for the issue. Reload the app and check that the order has left the waiting list.
-3. Select the product in **Inventory → Stock by location**. Confirm that **Activity history** shows the receipt as positive and the issue as negative.
-4. Open **Reports** to check overstock and slow-moving stock. The slow-moving report defaults to **18 October 2026**, the reference date for the team's SQL data. Open **Overview** to check the customer ranking.
+1. In **Customers**, add a test customer with an apostrophe in their name, then search for that name. Verify the customer appears in MySQL and still appears after a page reload.
+2. In **Goods issues**, click an issue and check that its lines load in the separate table below the list.
+3. Check **Inventory** and **Reports** with the seeded data, then use **Locations** to create, rename and delete a test bin.
 
 ## Data and API configuration
 
-This version uses browser-local storage. Entries persist under `warehouse.local.v3` on the current origin. A different hostname or port uses a separate storage area.
+API settings are in `frontend/src/config.js`. The default mode is `http`. The five optional operational reports are hidden in HTTP mode until their endpoints are enabled in `httpOperationReports`.
 
-API settings are defined in `frontend/src/config.js`. The default mode is `demo`, and the API address is `http://localhost:8080/api`, matching the team's Spring Boot backend. Enable HTTP mode once the backend provides `/api/bootstrap` and the report and mutation endpoints used by the application. Local records are not automatically transferred to MySQL.
-
-Local document version 5 adds zones, aisles and staff relationships. Loading version 3 or 4 first saves its original JSON under `<workspace-key>.schema-v3-backup` or `<workspace-key>.schema-v4-backup`. Missing zone/aisle records are derived from existing bin addresses, using the IDs as initial names. Existing quantities and identifiers are preserved. Legacy product values remain readable and must meet the new rules when edited; they are not silently rewritten.
-
-The HTTP client, response adapters and service calls are organised under `src/api/` and `src/services/` for integration with the team's API. Agree on endpoints and payloads before enabling HTTP mode.
+Development mode `demo` uses browser-local storage under `warehouse.local.v3` on the current origin. Local records stay in the browser when switching to HTTP mode.
 
 ## Project structure
 

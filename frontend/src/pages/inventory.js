@@ -1,4 +1,5 @@
 import { esc, storageName } from '../utils/format.js';
+import { showOperationReport } from '../config.js';
 import { localProductHistory } from '../domain/operation-reports.js';
 import {
   reportContent,
@@ -44,40 +45,41 @@ export function createInventory({ config, ctx, selectors, ui }) {
         (!ctx.filters.product || s.productId === ctx.filters.product),
     );
     const selected = products.get(ctx.filters.product);
-    const history =
-      '<section class="card">' +
-      ui.cardTitle(
-        'Activity history',
-        selected
-          ? esc(selected.id + ' · ' + selected.name)
-          : 'Select a product in Stock by location.',
-      ) +
-      (selected
-        ? reportContent(
-            ui,
-            ctx,
-            config,
-            'productHistory',
-            () =>
-              localProductHistory(
-                ctx.state,
-                selected.id,
-                (id) => bins.get(id)?.warehouseId ?? id,
-              ),
-            (items) =>
-              ui.table(
-                ['Date', 'Activity', 'Document', 'Quantity', 'Location'],
-                items
-                  .map(
-                    (r) =>
-                      `<tr><td>${reportDateLabel(r.activityDate)}</td><td>${esc(r.type)}</td><td>${esc(r.documentId)}</td><td class="number">${r.quantity > 0 ? '+' : ''}${num(r.quantity)} ${esc(selected.unit)}</td><td>${esc(r.location)}</td></tr>`,
-                  )
-                  .join(''),
-              ),
-            'No activity recorded for this product.',
-          )
-        : '') +
-      '</section>';
+    const history = showOperationReport(config, 'productHistory')
+      ? '<section class="card">' +
+        ui.cardTitle(
+          'Activity history',
+          selected
+            ? esc(selected.id + ' · ' + selected.name)
+            : 'Select a product in Stock by location.',
+        ) +
+        (selected
+          ? reportContent(
+              ui,
+              ctx,
+              config,
+              'productHistory',
+              () =>
+                localProductHistory(
+                  ctx.state,
+                  selected.id,
+                  (id) => bins.get(id)?.warehouseId ?? id,
+                ),
+              (items) =>
+                ui.table(
+                  ['Date', 'Activity', 'Document', 'Quantity', 'Location'],
+                  items
+                    .map(
+                      (r) =>
+                        `<tr><td>${reportDateLabel(r.activityDate)}</td><td>${esc(r.type)}</td><td>${esc(r.documentId)}</td><td class="number">${r.quantity > 0 ? '+' : ''}${num(r.quantity)} ${esc(selected.unit)}</td><td>${esc(r.location)}</td></tr>`,
+                    )
+                    .join(''),
+                ),
+              'No activity recorded for this product.',
+            )
+          : '') +
+        '</section>'
+      : '';
     return (
       ui.heading(
         'Inventory',

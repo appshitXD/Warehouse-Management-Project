@@ -1,8 +1,19 @@
 export const API_CONFIG = {
-  mode: 'demo',
+  mode: 'http',
   baseUrl: 'http://localhost:8080/api',
   timeoutMs: 10000,
 };
+
+// Add report keys here as their endpoints become available on the backend.
+export const httpOperationReports = [];
+
+const readOnlyOperations = ['receipt', 'issue', 'count', 'task', 'order'];
+export const canWrite = (config, operation) =>
+  config.mode !== 'http' ||
+  !readOnlyOperations.includes(operation.replace(/^delete-/, ''));
+
+export const showOperationReport = (config, key) =>
+  config.mode !== 'http' || httpOperationReports.includes(key);
 
 export const routes = [
   ['dashboard', '▦', 'Overview'],

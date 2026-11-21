@@ -58,7 +58,7 @@ export function createApplication({
   Object.assign(storage, createStorage({ env, storage, ctx, config }));
   ctx.pendingMutation = storage.readPendingMutation();
   const selectors = createSelectors({ ctx });
-  const ui = createUi({ ctx });
+  const ui = createUi({ ctx, config });
   const stock = createStock({ selectors, ctx, storage, env, config });
   const services = createServices({
     config,
@@ -71,7 +71,7 @@ export function createApplication({
   });
   Object.assign(pages, createDashboard({ ctx, selectors, ui, config }));
   Object.assign(pages, createInventory({ config, ctx, selectors, ui }));
-  Object.assign(pages, createDocuments({ ctx, selectors, ui }));
+  Object.assign(pages, createDocuments({ ctx, config, selectors, ui }));
   Object.assign(pages, createMovements({ ctx, selectors, ui }));
   Object.assign(pages, createCounts({ ui, ctx, selectors }));
   Object.assign(pages, createLocations({ ui, ctx, selectors }));
