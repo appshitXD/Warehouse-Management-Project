@@ -1,5 +1,6 @@
 import { num, date, esc, documentCode, round } from '../utils/format.js';
 import { localStockReports } from '../domain/operation-reports.js';
+import { showOperationReport } from '../config.js';
 import {
   reportContent,
   reportDateLabel,
@@ -21,58 +22,63 @@ export function createReports({ ui, ctx, config, selectors, stock }) {
     const http = config.mode === 'http';
     const asOf = ctx.reportsAsOf;
     const local = http ? null : localStockReports(ctx.state, asOf);
-    const stockCards =
-      '<section class="card">' +
-      ui.cardTitle(
-        'Overstocked products',
-        'Total stock is at least three times the reorder level.',
-      ) +
-      reportContent(
-        ui,
-        ctx,
-        config,
-        'overstock',
-        () => local.overstock,
-        (items) =>
-          ui.table(
-            ['Product', 'On hand', 'Reorder level', 'Warehouses'],
-            items
-              .map(
-                (r) =>
-                  `<tr><td>${esc(r.productId)} · ${esc(r.productName)}</td><td class="number">${num(r.totalQuantity)} ${esc(r.unit)}</td><td>${num(r.reorderLevel)}</td><td>${num(r.numWarehouses)}</td></tr>`,
-              )
-              .join(''),
-          ),
-        'No overstocked products.',
-      ) +
-      '</section><section class="card">' +
-      ui.cardTitle(
-        'Slow-moving stock',
-        'No goods issue in the last 90 days · As of ' + reportDateLabel(asOf),
-      ) +
-      ui.toolbar(
-        undefined,
-        `<label class="filter-field"><span>As of</span><input id="reports-as-of" type="date" value="${esc(asOf)}" min="1000-01-01" max="9999-12-31" required></label>`,
-      ) +
-      reportContent(
-        ui,
-        ctx,
-        config,
-        'slowMoving',
-        () => local.slowMoving,
-        (items) =>
-          ui.table(
-            ['Product', 'On hand'],
-            items
-              .map(
-                (r) =>
-                  `<tr><td>${esc(r.productId)} · ${esc(r.productName)}</td><td class="number">${num(r.onHand)}</td></tr>`,
-              )
-              .join(''),
-          ),
-        'No slow-moving stock for this date.',
-      ) +
-      '</section>';
+    const overstockCard = showOperationReport(config, 'overstock')
+      ? '<section class="card">' +
+        ui.cardTitle(
+          'Overstocked products',
+          'Total stock is at least three times the reorder level.',
+        ) +
+        reportContent(
+          ui,
+          ctx,
+          config,
+          'overstock',
+          () => local.overstock,
+          (items) =>
+            ui.table(
+              ['Product', 'On hand', 'Reorder level', 'Warehouses'],
+              items
+                .map(
+                  (r) =>
+                    `<tr><td>${esc(r.productId)} · ${esc(r.productName)}</td><td class="number">${num(r.totalQuantity)} ${esc(r.unit)}</td><td>${num(r.reorderLevel)}</td><td>${num(r.numWarehouses)}</td></tr>`,
+                )
+                .join(''),
+            ),
+          'No overstocked products.',
+        ) +
+        '</section>'
+      : '';
+    const slowMovingCard = showOperationReport(config, 'slowMoving')
+      ? '<section class="card">' +
+        ui.cardTitle(
+          'Slow-moving stock',
+          'No goods issue in the last 90 days · As of ' + reportDateLabel(asOf),
+        ) +
+        ui.toolbar(
+          undefined,
+          `<label class="filter-field"><span>As of</span><input id="reports-as-of" type="date" value="${esc(asOf)}" min="1000-01-01" max="9999-12-31" required></label>`,
+        ) +
+        reportContent(
+          ui,
+          ctx,
+          config,
+          'slowMoving',
+          () => local.slowMoving,
+          (items) =>
+            ui.table(
+              ['Product', 'On hand'],
+              items
+                .map(
+                  (r) =>
+                    `<tr><td>${esc(r.productId)} · ${esc(r.productName)}</td><td class="number">${num(r.onHand)}</td></tr>`,
+                )
+                .join(''),
+            ),
+          'No slow-moving stock for this date.',
+        ) +
+        '</section>'
+      : '';
+    const stockCards = overstockCard + slowMovingCard;
     if (http && !ctx.remoteReports)
       return (
         header +
@@ -84,9 +90,7 @@ export function createReports({ ui, ctx, config, selectors, stock }) {
               '<button class="button secondary" id="retry-reports">Retry reports</button>',
             )
           : ui.loadingState('Loading reports from the API…')) +
-        '<div class="report-grid">' +
-        stockCards +
-        '</div>'
+        (stockCards ? '<div class="report-grid">' + stockCards + '</div>' : '')
       );
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - 1);

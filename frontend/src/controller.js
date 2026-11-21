@@ -47,9 +47,21 @@ export function createController({
       orders: pages.ordersPage,
       suppliers: pages.suppliersPage,
     };
+    const focused = env.document.activeElement;
+    const searchPosition =
+      focused?.id === 'search'
+        ? [focused.selectionStart, focused.selectionEnd]
+        : null;
     $('#main').innerHTML = ui.statusBanner() + routePages[ctx.route]();
+    if (searchPosition && $('#search')) {
+      $('#search').focus({ preventScroll: true });
+      $('#search').setSelectionRange(...searchPosition);
+    } else if (focused?.id === 'issue-detail-heading') {
+      $('#issue-detail-heading')?.focus({ preventScroll: true });
+    }
     $('#main').setAttribute('aria-busy', String(ctx.refreshing));
     if (config.mode === 'http') services.loadRouteReports();
+    if (config.mode === 'http') services.loadRouteDirectory();
     if (
       ctx.route === 'reports' &&
       config.mode === 'http' &&

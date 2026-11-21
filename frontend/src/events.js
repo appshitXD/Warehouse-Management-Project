@@ -97,6 +97,17 @@ export function bindEvents({
       ctx.filters.detail = detail.dataset.detail;
       controller.render();
     }
+    const issue = e.target.closest('[data-issue]');
+    if (issue) {
+      ctx.filters.detail = issue.dataset.issue;
+      controller.render();
+      $('#issue-detail-heading')?.focus();
+    }
+    const directoryRetry = e.target.closest('[data-retry-directory]');
+    if (directoryRetry)
+      void services.loadDirectory(directoryRetry.dataset.retryDirectory, {
+        retry: true,
+      });
     if (e.target.closest('#add-line')) {
       $('#form-lines').insertAdjacentHTML('beforeend', forms.lineForm());
       forms.syncLine($$('.line-row').at(-1));
@@ -130,11 +141,17 @@ export function bindEvents({
   });
   env.document.addEventListener('input', (e) => {
     if (e.target.id === 'search') {
-      const position = e.target.selectionStart;
+      const previousQuery = ctx.filters.search.trim();
       ctx.filters.search = e.target.value;
-      controller.render();
-      $('#search').focus();
-      $('#search').setSelectionRange(position, position);
+      if (
+        config.mode === 'http' &&
+        ['customers', 'issues'].includes(ctx.route)
+      ) {
+        if (previousQuery === ctx.filters.search.trim()) return;
+        ctx.filters.detail = '';
+        const key = ctx.route;
+        void services.loadDirectory(key, { debounce: true });
+      } else controller.render();
     }
   });
   env.document.addEventListener('change', async (e) => {
@@ -179,7 +196,7 @@ export function bindEvents({
       if (config.mode === 'http') void services.loadLocations();
       else controller.render();
     }
-    if (e.target.dataset.task) {
+    if (config.mode === 'demo' && e.target.dataset.task) {
       const id = e.target.dataset.task,
         status = e.target.value;
       e.target.disabled = true;
@@ -197,19 +214,10 @@ export function bindEvents({
       }
       ctx.submitting = true;
       try {
-        if (config.mode === 'http') {
-          await services.sendMutation(
-            '/tasks/' + encodeURIComponent(id),
-            { status },
-            'PATCH',
-          );
-          await controller.afterWrite('Task updated.');
-        } else {
-          const next = structuredClone(ctx.state);
-          next.tasks.find((t) => t.id === id).status = status;
-          storage.persist(next);
-          controller.notify('Task updated.');
-        }
+        const next = structuredClone(ctx.state);
+        next.tasks.find((t) => t.id === id).status = status;
+        storage.persist(next);
+        controller.notify('Task updated.');
       } catch (error) {
         controller.notify(error.message);
       } finally {

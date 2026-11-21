@@ -2,6 +2,7 @@ import { icon } from '../components/navigation.js';
 import { documentCode, num, esc, date } from '../utils/format.js';
 import { localTopCustomers } from '../domain/operation-reports.js';
 import { reportContent } from '../components/operation-reports.js';
+import { showOperationReport } from '../config.js';
 export function createDashboard({ ctx, selectors, ui, config }) {
   function dashboard() {
     const occupied = ctx.state.bins.filter((b) =>
@@ -65,34 +66,35 @@ export function createDashboard({ ctx, selectors, ui, config }) {
       .slice(0, 5);
     const emptyPanel = (symbol, title, description) =>
       `<div class="overview-empty"><span class="overview-empty-icon" aria-hidden="true">${icon(symbol)}</span><strong>${title}</strong><p>${description}</p></div>`;
-    const topCustomers =
-      '<section class="card overview-top-customers">' +
-      ui.cardTitle('Top 10 customers', 'Ranked by units shipped.') +
-      reportContent(
-        ui,
-        ctx,
-        config,
-        'topCustomers',
-        () => localTopCustomers(ctx.state),
-        (items) => {
-          const ranked = [...items]
-            .sort((a, b) => b.unitsShipped - a.unitsShipped)
-            .slice(0, 10);
-          const max = ranked[0].unitsShipped || 1;
-          return (
-            '<ol class="customer-ranking card-body">' +
-            ranked
-              .map(
-                (row) =>
-                  `<li><div class="row-between"><strong>${esc(row.customerName)}</strong><span class="number">${num(row.unitsShipped)}</span></div><div class="progress-track" aria-hidden="true"><div class="progress-fill" style="width:${(row.unitsShipped / max) * 100}%"></div></div></li>`,
-              )
-              .join('') +
-            '</ol>'
-          );
-        },
-        'No units shipped yet.',
-      ) +
-      '</section>';
+    const topCustomers = showOperationReport(config, 'topCustomers')
+      ? '<section class="card overview-top-customers">' +
+        ui.cardTitle('Top 10 customers', 'Ranked by units shipped.') +
+        reportContent(
+          ui,
+          ctx,
+          config,
+          'topCustomers',
+          () => localTopCustomers(ctx.state),
+          (items) => {
+            const ranked = [...items]
+              .sort((a, b) => b.unitsShipped - a.unitsShipped)
+              .slice(0, 10);
+            const max = ranked[0].unitsShipped || 1;
+            return (
+              '<ol class="customer-ranking card-body">' +
+              ranked
+                .map(
+                  (row) =>
+                    `<li><div class="row-between"><strong>${esc(row.customerName)}</strong><span class="number">${num(row.unitsShipped)}</span></div><div class="progress-track" aria-hidden="true"><div class="progress-fill" style="width:${(row.unitsShipped / max) * 100}%"></div></div></li>`,
+                )
+                .join('') +
+              '</ol>'
+            );
+          },
+          'No units shipped yet.',
+        ) +
+        '</section>'
+      : '';
     return (
       '<div class="dashboard-overview">' +
       ui.heading(
@@ -100,7 +102,7 @@ export function createDashboard({ ctx, selectors, ui, config }) {
         'Stock visibility and the operations that need your attention.',
         '<a href="#reports" class="button secondary">View reports</a>',
       ) +
-      `<div class="overview-actions"><div class="quick-actions" aria-label="Stock operations">${ui.actionButton('receipt', 'Create receipt')}${ui.actionButton('issue', 'Create issue', 'secondary')}${ui.actionButton('movement', 'Transfer stock', 'secondary')}${ui.actionButton('count', 'Record count', 'secondary')}</div><div class="demo-banner">${config.mode === 'demo' ? 'Local data · Saved in this browser' : 'Connected to backend · Data from the API'}</div></div>` +
+      `<div class="overview-actions">${config.mode === 'demo' ? `<div class="quick-actions" aria-label="Stock operations">${ui.actionButton('receipt', 'Create receipt')}${ui.actionButton('issue', 'Create issue', 'secondary')}${ui.actionButton('movement', 'Transfer stock', 'secondary')}${ui.actionButton('count', 'Record count', 'secondary')}</div>` : ''}<div class="demo-banner">${config.mode === 'demo' ? 'Local data · Saved in this browser' : 'Connected to backend · Data from the API'}</div></div>` +
       `<section class="stats" aria-label="Inventory summary">${stats.map(([label, value, note, glyph, color]) => `<div class="stat ${color}"><div class="stat-label">${label}<span class="stat-icon">${icon(glyph === '▣' ? 'inventory' : glyph === '▧' ? 'locations' : glyph === '↘' ? 'receipts' : 'counts')}</span></div><div class="stat-value">${value}</div><div class="stat-note ${color}">${note}</div></div>`).join('')}</section>` +
       (discrepancies.length
         ? `<div class="alert-box"><div><strong>${discrepancies.length} stock count ${discrepancies.length === 1 ? 'discrepancy' : 'discrepancies'}</strong>Review the recorded differences in count ${documentCode(latest.id)}.</div><a class="button secondary" href="#counts">View differences →</a></div>`
