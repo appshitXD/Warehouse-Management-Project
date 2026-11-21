@@ -66,9 +66,12 @@ com.group4.warehouse
 ├── warehouse/   Warehouse, Create/Update request, Repository (SQL), Service, Controller
 ├── zone/  aisle/  bin/  product/  supplier/  customer/   (same five-file pattern)
 ├── staff/       Staff CRUD, STAFF + STAFF_PHONE in one transaction
-├── issue/       goods issues, master (GOODS_ISSUE) - detail (GOODS_ISSUE_LINE)
+├── receipt/     goods receipts + lines; saving adds stock (one transaction)
+├── issue/       goods issues + lines; Shipped/Completed takes stock out (one transaction)
+├── count/       stock counts + lines; Completed sets stock to the counted quantity
 ├── movement/    POST /api/movements, 3 SQL statements in one transaction
-├── order/       orders waiting to ship
+├── order/       customer orders, plus orders waiting to ship
+├── task/        tasks assigned to staff
 ├── report/      the report endpoints (/api/reports/...)
 └── bootstrap/   GET /api/bootstrap, every list the frontend needs in one call
 ```
@@ -96,6 +99,8 @@ com.group4.warehouse
 | 409 | `DUPLICATE` | ID or unique name already exists |
 | 409 | `IN_USE` | delete blocked: child rows still reference it |
 | 409 | `REFERENCE_NOT_FOUND` | the parent (e.g. warehouse of a zone) does not exist |
+| 409 | `LOCKED` | the document's status forbids the change (e.g. deleting a Shipped issue) |
+| 409 | `NOT_IN_BIN`, `NOT_ENOUGH_STOCK` | the bin cannot give the stock a document needs |
 | 503 | `DATABASE_UNAVAILABLE` | MySQL is not reachable |
 
 ## Endpoints
@@ -112,13 +117,33 @@ Status: ✅ done
 | Supplier | `/suppliers`, `/suppliers/{id}` | `{id, name, phone, address}` | ✅ |
 | Customer | `/customers`, `/customers/{id}` | `{id, name, phone, address}` | ✅ |
 | Staff | `/staff`, `/staff/{id}` (STAFF + STAFF_PHONE in one transaction) | `{id, name, address, warehouseId, supervisorId, phone, phones[]}` | ✅ |
-| Goods issue | `GET /issues`, `GET /issues/{id}`, `GET /issues/{id}/lines` | `{id, date, status, stateOfGood, orderId, customerId, customerName}` | ✅ |
+| Goods receipt | `/receipts`, `/receipts/{id}`, `GET /receipts/{id}/lines` | `{id, date, supplierId, supplierName, lines[]}` | ✅ |
+| Goods issue | `/issues`, `/issues/{id}`, `GET /issues/{id}/lines` | `{id, date, status, stateOfGood, orderId, customerId, customerName}` | ✅ |
+| Stock count | `/counts`, `/counts/{id}`, `GET /counts/{id}/lines` | `{id, date, status, lines[]}` | ✅ |
 | Stock movement | `POST /movements` (one transaction) | `{productId, fromBinId, toBinId, quantity, staffId}` | ✅ |
-| Order | `GET /orders/awaiting-issue` | `{items: [{orderId, time, status, customerName}]}` | ✅ |
+| Order | `/orders`, `/orders/{id}`, `GET /orders/awaiting-issue` | `{id, time, status, customerId, customerName}` | ✅ |
+| Task | `/tasks`, `/tasks/{id}` | `{id, name, status, staffId, staffName}` | ✅ |
 | Bootstrap | `GET /bootstrap` | one object with every list the frontend shows | ✅ |
 | Reports | `GET /reports/product-locations`, `low-stock`, `movements`, `empty-bins`, `latest-count-differences`, `overstock`, `slow-moving?asOf=`, `top-customers` | `{items: [...]}` (+ `from`/`to`/`asOf`) | ✅ |
 
-Saving orders, tasks, receipts, issues and counts is not part of the brief, so those are read-only.
+### Receipts, issues and counts
+
+These three documents change stock, so each save runs as one transaction over the header,
+its lines and `PRODUCT_BIN` (see `common/Transactions.java` and `common/StockLedger.java`).
+
+Body of `POST`: `{ "lines": [ { "productId": "P01", "binId": "W02|Z02|A02|B007", "quantity": 5 } ], ... }`
+plus `supplierId` (receipt), `orderId` + `stateOfGood` (issue). `id`, `date` and `status`
+are optional: the next ID (GR16, GI17, SC20, ...), today, and the column `DEFAULT 'Pending'`.
+`PATCH` takes the same fields, all optional; sending `lines` replaces every line.
+
+| Document | When stock changes | Edit | Delete |
+|---|---|---|---|
+| Goods receipt (no status column) | added as soon as it is saved | any time; stock moves by the difference | takes the stock back out; refused (409) if it has already left the bin |
+| Goods issue | taken out when the status becomes Shipped or Completed | everything while Pending; afterwards only Shipped → Completed | only while Pending |
+| Stock count | when the status becomes Completed, stock = counted quantity; `Recorded_Quantity` is re-read just before | until Completed; status never goes back | only while Pending |
+
+Orders and tasks are single-table CRUD with no stock effect. An order that already has a
+goods issue cannot be deleted (`FK_ISSUE_ORDER ... ON DELETE RESTRICT` → 409 `IN_USE`).
 
 Formats shared with the frontend (`contracts.js`):
 - **Bin ID** is one string `W02|Z02|A02|B007` (warehouse|zone|aisle|position),
