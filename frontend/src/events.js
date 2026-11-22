@@ -193,7 +193,8 @@ export function bindEvents({
     if (e.target.id === 'reports-as-of') {
       if (e.target.value && e.target.validity.valid)
         ctx.reportsAsOf = e.target.value;
-      controller.render();
+      if (config.mode === 'http') void services.loadReports();
+      else controller.render();
       $('#reports-as-of')?.focus();
     }
     if (e.target.id === 'inventory-product-filter') {
