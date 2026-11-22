@@ -411,8 +411,9 @@ export function createStock({ selectors, ctx, storage, env, config }) {
     );
   }
 
-  function lastWeek() {
-    const end = new Date();
+  // Monday to Sunday of the week before `ref` (default: today).
+  function lastWeek(ref = new Date()) {
+    const end = new Date(ref);
     end.setHours(0, 0, 0, 0);
     end.setDate(end.getDate() - ((end.getDay() + 6) % 7));
     const start = new Date(end);
