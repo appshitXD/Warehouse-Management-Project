@@ -26,8 +26,10 @@ mysql -u root -p < ../database/warehouse.sql
 curl http://localhost:8080/api/health            # {"db":"up","catalog":"WarehouseManagement"}
 ```
 
-`database/schema.sql` and `database/dev-seed.sql` are the old 7-table scripts and are
-no longer used by the app.
+`warehouse.sql` gives the app clean sample data. `database/PDM_Database_Group4.sql` is the
+submitted script (deliverable D5): it starts with the same database, then runs the queries,
+updates and transaction, so the data is different afterwards. Run `warehouse.sql` again
+before a demo.
 
 On Linux, MySQL table names are case-sensitive and some older repositories use
 lower-case table names, so start MySQL there with `lower_case_table_names=1`.

@@ -11,7 +11,7 @@ Built with HTML, CSS and JavaScript ES modules. The application runs without a f
 - **Stock operations** — receipt and count history, goods issue details and bin-to-bin transfers.
 - **Locations** — warehouse, zone, aisle and bin organisation.
 - **Directories and assignments** — suppliers, staff, customers, orders and tasks.
-- **Reports** — low stock, movement history, bins empty throughout the previous week and latest count differences.
+- **Reports** — low stock, overstock, slow-moving stock, movement history, bins empty throughout the previous week and latest count differences. Top customers are on the overview, orders waiting for a goods issue on the orders page, and a product's activity history in Inventory when one product is selected.
 
 ## Getting started
 
@@ -65,7 +65,7 @@ Product rules follow the current backend: IDs use up to 10 letters, digits, unde
 
 ## Data and API configuration
 
-API settings are in `frontend/src/config.js`. The default mode is `http`. The five optional operational reports are hidden in HTTP mode until their endpoints are enabled in `httpOperationReports`.
+API settings are in `frontend/src/config.js`. The default mode is `http`. `httpOperationReports` lists the extra reports loaded from the API: overstocked products, slow-moving stock, top customers, orders waiting for a goods issue and product activity history. Remove a key to hide its card.
 
 Development mode `demo` uses browser-local storage under `warehouse.local.v3` on the current origin. Local records stay in the browser when switching to HTTP mode.
 
