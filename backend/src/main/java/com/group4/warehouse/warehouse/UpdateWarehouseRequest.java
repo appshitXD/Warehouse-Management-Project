@@ -11,11 +11,12 @@ import jakarta.validation.constraints.Size;
 public record UpdateWarehouseRequest(
 
         // null = keep the current name; if it is sent, it must not be blank.
-        @Size(max = 120, message = "Warehouse name must be at most 120 characters.")
+        @Size(max = 100, message = "Warehouse name must be at most 100 characters.")
         @Pattern(regexp = "(?s).*\\S.*", message = "Warehouse name must not be blank.")
         String name,
 
-        // null = keep; "" = clear the address.
-        @Size(max = 250, message = "Address must be at most 250 characters.")
+        // null = keep; if it is sent, it must not be blank (Address is NOT NULL).
+        @Size(max = 255, message = "Address must be at most 255 characters.")
+        @Pattern(regexp = "(?s).*\\S.*", message = "Address must not be blank.")
         String address) {
 }

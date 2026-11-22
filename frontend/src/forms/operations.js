@@ -397,7 +397,7 @@ export function createForms({
         );
     } else if (type === 'staff') {
       const phones = record?.phones || [];
-      html = `<div class="form-grid">${field('Staff ID', 'id', input('id', 'text', 'maxlength="40"'))}${field('Name', 'name', input('name', 'text', 'maxlength="120"'))}${field(
+      html = `<div class="form-grid">${field('Staff ID', 'id', input('id', 'text', 'maxlength="10"'))}${field('Name', 'name', input('name', 'text', 'maxlength="100"'))}${field(
         'Warehouse',
         'warehouseId',
         select(
@@ -413,7 +413,7 @@ export function createForms({
           (p) => p.id + ' · ' + p.name,
           record?.supervisorId || '',
         )}</select>`,
-      )}${field('Address', 'address', '<input name="address" maxlength="250">', true)}</div><section class="staff-phones"><h3>Phone numbers</h3><p class="muted">Optional. Each number is stored separately.</p><div id="staff-phone-list">${(phones.length ? phones : ['']).map(phoneForm).join('')}</div><button type="button" class="button secondary" id="add-staff-phone">Add phone number</button></section>`;
+      )}${field('Address', 'address', '<input name="address" maxlength="150" required>', true)}</div><section class="staff-phones"><h3>Phone numbers</h3><p class="muted">Optional. Each number is stored separately.</p><div id="staff-phone-list">${(phones.length ? phones : ['']).map(phoneForm).join('')}</div><button type="button" class="button secondary" id="add-staff-phone">Add phone number</button></section>`;
     } else if (['customer', 'supplier'].includes(type)) {
       html =
         '<div class="form-grid">' +
@@ -423,7 +423,7 @@ export function createForms({
           input(
             'id',
             'text',
-            'maxlength="40" value="' +
+            'maxlength="10" value="' +
               esc(record?.id || '') +
               '" ' +
               (id ? 'readonly' : ''),
@@ -435,20 +435,20 @@ export function createForms({
           input(
             'name',
             'text',
-            'maxlength="120" value="' + esc(record?.name || '') + '"',
+            'maxlength="100" value="' + esc(record?.name || '') + '"',
           ),
         ) +
         field(
           'Phone',
           'phone',
-          '<input name="phone" type="tel" maxlength="20" value="' +
+          '<input name="phone" type="tel" maxlength="20" required value="' +
             esc(record?.phone || '') +
             '">',
         ) +
         field(
           'Address',
           'address',
-          '<input name="address" maxlength="250" value="' +
+          '<input name="address" maxlength="100" required value="' +
             esc(record?.address || '') +
             '">',
           true,
@@ -457,16 +457,16 @@ export function createForms({
     } else if (type === 'warehouse') {
       html =
         '<div class="form-grid">' +
-        field('Warehouse ID', 'id', input('id', 'text', 'maxlength="40"')) +
+        field('Warehouse ID', 'id', input('id', 'text', 'maxlength="10"')) +
         field(
           'Warehouse name',
           'name',
-          input('name', 'text', 'maxlength="120"'),
+          input('name', 'text', 'maxlength="100"'),
         ) +
         field(
           'Address',
           'address',
-          '<input name="address" maxlength="250">',
+          '<input name="address" maxlength="255" required>',
           true,
         ) +
         '</div>';
@@ -486,14 +486,14 @@ export function createForms({
           ? field(
               'Zone ID',
               'zoneId',
-              input('zoneId', 'text', 'maxlength="40"'),
+              input('zoneId', 'text', 'maxlength="10"'),
             )
           : field('Zone', 'zone', '<select name="zone" required></select>')) +
         (type === 'aisle'
           ? field(
               'Aisle ID',
               'aisleId',
-              input('aisleId', 'text', 'maxlength="40"'),
+              input('aisleId', 'text', 'maxlength="10"'),
             )
           : type === 'bin'
             ? field('Aisle', 'aisle', '<select name="aisle" required></select>')
@@ -502,13 +502,13 @@ export function createForms({
           ? field(
               'Position',
               'position',
-              input('position', 'text', 'maxlength="40"'),
+              input('position', 'text', 'maxlength="10"'),
             )
           : '') +
         field(
           type === 'bin' ? 'Bin name' : 'Name',
           'name',
-          `<input name="name" maxlength="120" ${type === 'bin' ? '' : 'required'}>`,
+          `<input name="name" maxlength="${type === 'bin' ? 50 : 100}" required>`,
         ) +
         `</div><p class="info-note">${type === 'zone' ? 'Zone IDs are unique within a warehouse.' : type === 'aisle' ? 'Aisle IDs are unique within a warehouse and zone.' : 'A bin is uniquely identified by its warehouse, zone, aisle and position.'}</p>`;
     } else if (type === 'order') {
@@ -520,7 +520,7 @@ export function createForms({
           input(
             'id',
             'text',
-            'maxlength="40" value="' +
+            'maxlength="10" value="' +
               esc(record?.id || '') +
               '" ' +
               (id ? 'readonly' : ''),

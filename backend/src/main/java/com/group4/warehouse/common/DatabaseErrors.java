@@ -50,9 +50,8 @@ public final class DatabaseErrors {
         switch (e.getErrorCode()) {
             case 1062: // duplicate primary key or UNIQUE value
                 return new ApiException(HttpStatus.CONFLICT, "DUPLICATE",
-                        text.contains("PRIMARY")
-                                ? article(entity) + " " + entity + " with this ID already exists."
-                                : article(entity) + " " + entity + " with this name already exists.", e);
+                        article(entity) + " " + entity + " with this " + duplicateField(text)
+                                + " already exists.", e);
             case 1451: // parent row still referenced by a child row
                 return new ApiException(HttpStatus.CONFLICT, "IN_USE",
                         "This " + entity + " cannot be deleted because other records still use it. "
@@ -75,6 +74,26 @@ public final class DatabaseErrors {
                 return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "DATABASE_ERROR",
                         "Unexpected database error. Please try again.", e);
         }
+    }
+
+    /**
+     * Which value is duplicated, from the key named in the message, e.g.
+     * Duplicate entry '555-0201' for key 'customer.UQ_CUSTOMER_PHONE'.
+     * UNIQUE keys in warehouse.sql: UQ_WAREHOUSE_NAME, UQ_SUPPLIER_PHONE, UQ_CUSTOMER_PHONE,
+     * plus the stock count and stock history keys, which the app never inserts twice.
+     */
+    private static String duplicateField(String text) {
+        String upper = text.toUpperCase();
+        if (upper.contains("PRIMARY")) {
+            return "ID";
+        }
+        if (upper.contains("PHONE")) {
+            return "phone number";
+        }
+        if (upper.contains("NAME")) {
+            return "name";
+        }
+        return "combination of values";
     }
 
     /** "A warehouse", but "An aisle". */

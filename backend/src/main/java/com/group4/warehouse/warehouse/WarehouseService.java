@@ -33,7 +33,7 @@ public class WarehouseService {
         Warehouse warehouse = new Warehouse(
                 Text.trim(request.id()),
                 Text.trim(request.name()),
-                Text.trimToNull(request.address()));
+                Text.trim(request.address()));
         repository.insert(warehouse);
         return warehouse;
     }

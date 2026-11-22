@@ -30,8 +30,8 @@ public class SupplierService {
         Supplier supplier = new Supplier(
                 Text.trim(request.id()),
                 Text.trim(request.name()),
-                Text.trimToNull(request.phone()),
-                Text.trimToNull(request.address()));
+                Text.trim(request.phone()),
+                Text.trim(request.address()));
         repository.insert(supplier);
         return supplier;
     }
