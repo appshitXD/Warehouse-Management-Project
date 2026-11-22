@@ -136,10 +136,14 @@ export function createServices({
     ctx.reportsError = '';
     ctx.remoteReports = null;
     controller.render();
-    const end = new Date(),
-      from = new Date(end);
-    from.setMonth(from.getMonth() - 1);
-    const week = stock.lastWeek();
+    // Reports use the same fixed date as the SQL queries (@today = reportsAsOf,
+    // 2026-10-18), so the app shows the same results as the report.
+    // Q3 "last month" = the calendar month before that date,
+    // Q4 "last week" = Monday to Sunday of the week before it.
+    const asOf = new Date(ctx.reportsAsOf + 'T00:00:00'),
+      end = new Date(asOf.getFullYear(), asOf.getMonth(), 1),
+      from = new Date(asOf.getFullYear(), asOf.getMonth() - 1, 1);
+    const week = stock.lastWeek(asOf);
     const query = new URLSearchParams({
       from: from.toISOString(),
       to: end.toISOString(),

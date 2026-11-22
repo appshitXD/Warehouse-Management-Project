@@ -120,7 +120,9 @@ export function createReports({ ui, ctx, config, selectors, stock }) {
       picker +
       '<div class="demo-banner">' +
       (http
-        ? 'Report results are provided by the API.'
+        ? 'Report results are provided by the API, as of ' +
+          date(ctx.reportsAsOf + 'T00:00:00') +
+          '.'
         : 'Reports are calculated from history stored in this browser.') +
       '</div><div class="report-grid">' +
       '<section class="card">' +
@@ -168,7 +170,11 @@ export function createReports({ ui, ctx, config, selectors, stock }) {
         '03 · Movements over the last month',
         date(http ? ctx.remoteReports.movements.from : cutoff) +
           ' – ' +
-          date(http ? ctx.remoteReports.movements.to : new Date()),
+          date(
+            http
+              ? new Date(new Date(ctx.remoteReports.movements.to).getTime() - 1)
+              : new Date(),
+          ),
       ) +
       ui.table(
         ['Product', 'Date', 'From bin', 'To bin', 'Quantity'],
