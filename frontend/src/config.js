@@ -4,8 +4,14 @@ export const API_CONFIG = {
   timeoutMs: 10000,
 };
 
-// Add report keys here as their endpoints become available on the backend.
-export const httpOperationReports = [];
+// Extra reports loaded from the backend in HTTP mode. Remove a key to hide its card.
+export const httpOperationReports = [
+  'overstock',
+  'slowMoving',
+  'topCustomers',
+  'waitingOrders',
+  'productHistory',
+];
 
 // Every operation can be saved through the API. Add a type here to make it read-only again.
 const readOnlyOperations = [];
