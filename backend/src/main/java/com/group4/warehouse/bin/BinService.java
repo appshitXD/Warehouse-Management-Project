@@ -41,14 +41,14 @@ public class BinService {
                 aisle.zoneId(),
                 aisle.id(),
                 Text.trim(request.position()),
-                Text.trimToNull(request.name()));
+                Text.trim(request.name()));
         repository.insert(bin);
         return bin;
     }
 
     public Bin update(String warehouseId, String zoneId, String aisleId, String position, UpdateBinRequest request) {
         if (request.name() == null) {
-            throw ApiException.badRequest("Nothing to update: send name (\"\" clears it).");
+            throw ApiException.badRequest("Nothing to update: send name.");
         }
 
         if (!repository.update(warehouseId, zoneId, aisleId, position, Text.trim(request.name()))) {

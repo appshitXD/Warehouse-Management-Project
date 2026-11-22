@@ -30,8 +30,8 @@ public class CustomerService {
         Customer customer = new Customer(
                 Text.trim(request.id()),
                 Text.trim(request.name()),
-                Text.trimToNull(request.phone()),
-                Text.trimToNull(request.address()));
+                Text.trim(request.phone()),
+                Text.trim(request.address()));
         repository.insert(customer);
         return customer;
     }

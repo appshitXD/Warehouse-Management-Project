@@ -47,7 +47,7 @@ export function createStock({ selectors, ctx, storage, env, config }) {
     }
     if (type === 'order') {
       assert(
-        /^[A-Za-z0-9_-]{1,40}$/.test(payload.id || ''),
+        /^[A-Za-z0-9_-]{1,10}$/.test(payload.id || ''),
         'Invalid order ID.',
       );
       const old = ctx.state.orders.find((r) => r.id === ctx.editingId);

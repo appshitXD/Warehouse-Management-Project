@@ -40,7 +40,7 @@ export function validateCatalogue(type, payload, ctx) {
   const check = (condition, field, message) => {
     if (!condition) fail(field, message);
   };
-  const code = (value, field, max = 40) =>
+  const code = (value, field, max = 10) =>
     check(
       typeof value === 'string' &&
         new RegExp(`^[A-Za-z0-9_-]{1,${max}}$`).test(value),
@@ -151,7 +151,8 @@ export function validateCatalogue(type, payload, ctx) {
             key,
             'Location addresses cannot be changed. Create a new location instead.',
           );
-    text(payload.name ?? '', 'name', 120, type !== 'bin');
+    // Zone_Name and Aisle_Name are VARCHAR(100), BIN.Name VARCHAR(50); all NOT NULL.
+    text(payload.name ?? '', 'name', type === 'bin' ? 50 : 100);
     if (type !== 'bin')
       check(
         !rows.some(
@@ -166,8 +167,9 @@ export function validateCatalogue(type, payload, ctx) {
       );
     return true;
   }
-  code(payload.id, 'id', type === 'product' ? 10 : 40);
-  text(payload.name, 'name', type === 'product' ? 100 : 120);
+  // Column sizes in warehouse.sql: every ID is VARCHAR(10), every name VARCHAR(100).
+  code(payload.id, 'id', 10);
+  text(payload.name, 'name', 100);
   if (type === 'product') {
     text(payload.unit, 'unit', 20);
     check(
@@ -183,7 +185,13 @@ export function validateCatalogue(type, payload, ctx) {
       'Reorder level must be a positive integer up to 2147483647.',
     );
   } else {
-    text(payload.address ?? '', 'address', 250, false);
+    // Address is NOT NULL: WAREHOUSE VARCHAR(255), STAFF VARCHAR(150),
+    // CUSTOMER and SUPPLIER VARCHAR(100).
+    text(
+      payload.address ?? '',
+      'address',
+      { warehouse: 255, staff: 150 }[type] || 100,
+    );
     if (type === 'warehouse')
       check(
         !rows.some(
@@ -222,7 +230,7 @@ export function validateCatalogue(type, payload, ctx) {
         check(person, 'supervisorId', 'Select a valid supervisor.');
         supervisor = person.supervisorId;
       }
-    } else if (payload.phone) phone(payload.phone, 'phone');
+    } else phone(payload.phone ?? '', 'phone'); // customer and supplier: NOT NULL
   }
   return true;
 }
