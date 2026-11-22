@@ -1,6 +1,6 @@
 import { icon } from './navigation.js';
 import { esc } from '../utils/format.js';
-import { canWrite } from '../config.js';
+import { canChangeDocuments, canWrite } from '../config.js';
 export function createUi({ ctx, config }) {
   const badge = (label, color = 'green') =>
     `<span class="pill ${color}">${esc(label)}</span>`;
@@ -53,6 +53,13 @@ export function createUi({ ctx, config }) {
   function recordActions(type, id) {
     if (!canWrite(config, type)) return '';
     return `<div class="record-actions"><button class="button quiet" data-operation="${type}" data-edit="${esc(id)}" aria-label="Edit ${type} ${esc(id)}">Edit</button><button class="button quiet danger" data-operation="delete-${type}" data-edit="${esc(id)}" aria-label="Delete ${type} ${esc(id)}">Delete</button></div>`;
+  }
+
+  // Edit / Delete for receipts, issues, counts, orders and tasks (HTTP mode only).
+  // The status of a document decides which of the two buttons it still has.
+  function documentActions(type, id, { edit = true, remove = true } = {}) {
+    if (!canChangeDocuments(config, type) || (!edit && !remove)) return '';
+    return `<div class="record-actions">${edit ? `<button type="button" class="button quiet" data-operation="${type}" data-edit="${esc(id)}" aria-label="Edit ${type} ${esc(id)}">Edit</button>` : ''}${remove ? `<button type="button" class="button quiet danger" data-operation="delete-${type}" data-edit="${esc(id)}" aria-label="Delete ${type} ${esc(id)}">Delete</button>` : ''}</div>`;
   }
 
   function cardTitle(title, subtitle = '', action = '') {
@@ -130,6 +137,7 @@ export function createUi({ ctx, config }) {
     heading,
     actionButton,
     recordActions,
+    documentActions,
     cardTitle,
     emptyState,
     loadingState,

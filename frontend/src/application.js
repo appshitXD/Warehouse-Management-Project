@@ -73,7 +73,7 @@ export function createApplication({
   Object.assign(pages, createInventory({ config, ctx, selectors, ui }));
   Object.assign(pages, createDocuments({ ctx, config, selectors, ui }));
   Object.assign(pages, createMovements({ ctx, selectors, ui }));
-  Object.assign(pages, createCounts({ ui, ctx, selectors }));
+  Object.assign(pages, createCounts({ ui, ctx, selectors, config }));
   Object.assign(pages, createLocations({ ui, ctx, selectors }));
   Object.assign(pages, createTasks({ ctx, ui, selectors, config }));
   Object.assign(pages, createReports({ ui, ctx, config, selectors, stock }));

@@ -4,7 +4,14 @@ import {
   presentFormErrors,
 } from './accessibility.js';
 import { esc, num } from '../utils/format.js';
-import { canWrite, httpOrderLabels, orderLabels } from '../config.js';
+import {
+  canWrite,
+  httpCountLabels,
+  httpIssueLabels,
+  httpOrderLabels,
+  httpTaskLabels,
+  orderLabels,
+} from '../config.js';
 import { storageRequirements, locationKey } from '../domain/catalogue.js';
 export function createForms({
   $,
@@ -58,21 +65,36 @@ export function createForms({
     return missing;
   }
 
-  function lineForm() {
-    const p = ctx.state.products[0],
-      bins = p ? stock.eligibleBins(ctx.operation, p.id) : [],
-      b = bins[0];
+  // line = a saved line when editing a document, so the row starts with its values.
+  function lineForm(line = null) {
+    const p = line ? selectors.product(line.productId) : ctx.state.products[0],
+      bins = p ? stock.eligibleBins(ctx.operation, p.id) : [];
+    if (
+      line &&
+      !bins.some((x) => x.id === line.binId) &&
+      selectors.bin(line.binId)
+    )
+      bins.unshift(selectors.bin(line.binId));
+    const b = line ? selectors.bin(line.binId) : bins[0];
     const address =
       '<small class="bin-address" aria-live="polite">' +
       esc(b ? selectors.binName(b.id) : 'No bins available.') +
       '</small>';
+    // The database stores whole quantities (INT), so HTTP mode only accepts whole numbers.
+    const whole = config.mode === 'http';
     const quantityField = input(
       'quantity',
       'number',
       'min="' +
-        (ctx.operation === 'count' ? 0 : 0.001) +
-        '" step="0.001" value="' +
-        (ctx.operation === 'count' ? 0 : 1) +
+        (ctx.operation === 'count' ? 0 : whole ? 1 : 0.001) +
+        '" step="' +
+        (whole ? 1 : 0.001) +
+        '" value="' +
+        (line
+          ? (line.countedQuantity ?? line.quantity)
+          : ctx.operation === 'count'
+            ? 0
+            : 1) +
         '"',
     );
     return (
@@ -80,12 +102,13 @@ export function createForms({
       field(
         'Product',
         'productId',
-        select('productId', ctx.state.products, (p) => p.id + ' · ' + p.name),
+        `<select name="productId" required>${ui.options(ctx.state.products, (p) => p.id + ' · ' + p.name, p?.id || '')}</select>`,
       ) +
       field(
         'Bin',
         'binId',
-        select('binId', bins, (b) => selectors.binName(b.id)) + address,
+        `<select name="binId" required>${ui.options(bins, (b) => selectors.binName(b.id), b?.id || '')}</select>` +
+          address,
       ) +
       field(
         ctx.operation === 'count' ? 'Counted quantity' : 'Quantity',
@@ -171,6 +194,83 @@ export function createForms({
         : 'A source with stock and a different destination are required.';
   }
 
+  // Status options a document may move to: never back to an earlier status.
+  function statusSelect(labels, current, name = 'status') {
+    const order = Object.keys(labels),
+      from = Math.max(0, order.indexOf(current));
+    return `<select name="${name}" required>${order
+      .slice(from)
+      .map(
+        (v) =>
+          `<option value="${esc(v)}" ${v === current ? 'selected' : ''}>${esc(labels[v])}</option>`,
+      )
+      .join('')}</select>`;
+  }
+
+  // Goods receipt, goods issue or stock count: header fields, then one row per line.
+  // record = the saved document when editing.
+  function documentForm(type, record) {
+    const http = config.mode === 'http';
+    // A shipped issue has already left the warehouse: only its status can move on.
+    if (type === 'issue' && record && record.status !== 'Pending')
+      return `<div class="form-grid">${field('Status', 'status', statusSelect(httpIssueLabels, record.status))}</div><p class="info-note">${esc(record.id)} is ${esc(record.status)}: its goods have already left the bins, so only its status can still move on (Shipped → Completed).</p>`;
+    const orders = ctx.state.orders.filter(
+      (o) => o.status === initialOrderStatus || o.id === record?.orderId,
+    );
+    const header =
+      type === 'receipt'
+        ? field(
+            'Supplier',
+            'supplierId',
+            `<select name="supplierId" required>${ui.options(ctx.state.suppliers, (x) => x.name, record?.supplierId || '')}</select>`,
+          )
+        : type === 'issue'
+          ? field(
+              'Customer order',
+              'orderId',
+              `<select name="orderId" required>${ui.options(orders, (o) => o.id + ' · ' + selectors.customerName(o.customerId), record?.orderId || '')}</select>`,
+            ) +
+            field(
+              'Status',
+              'status',
+              http
+                ? statusSelect(httpIssueLabels, record?.status || 'Pending')
+                : input('status', 'text', 'maxlength="40" value="recorded"'),
+            ) +
+            field(
+              'State of goods',
+              'stateOfGood',
+              `<input name="stateOfGood" maxlength="50" required placeholder="Good, Fragile, Perishable…" value="${esc(record?.stateOfGood || '')}">`,
+            )
+          : http
+            ? field(
+                'Status',
+                'status',
+                statusSelect(httpCountLabels, record?.status || 'Pending'),
+              )
+            : '';
+    const notes = http
+      ? {
+          receipt:
+            'Saving adds each line to the stock of its bin. Editing the lines changes stock by the difference.',
+          issue:
+            'Stock leaves the bins only when the status is Shipped or Completed. A Pending issue can still be edited or deleted.',
+          count:
+            'Stock changes only when the count is Completed: each bin is set to the counted quantity, and the stock just before is kept as the recorded quantity.',
+        }
+      : {
+          receipt: 'Select bins. Every line is checked before updating stock.',
+          issue:
+            'Saving deducts stock immediately. Status is descriptive and does not create a draft.',
+          count:
+            'Saving replaces stock with the counted quantities and writes stock history. The previous stock is retained for reconciliation. Complete the count before resuming movements.',
+        };
+    const rows = record?.lines?.length
+      ? record.lines.map((l) => lineForm(l)).join('')
+      : lineForm();
+    return `<div class="form-grid">${header}</div><h3 class="line-heading">${type === 'count' ? 'Count lines' : 'Goods lines'}</h3><p class="info-note">${notes[type]}</p><div id="form-lines">${rows}</div><button type="button" id="add-line" class="button quiet add-line-button">＋ Add line</button>`;
+  }
+
   function openOperation(type, id = '') {
     if (!canWrite(config, type)) return false;
     if (ctx.submitting || ctx.refreshing || ctx.stale || ctx.pendingMutation) {
@@ -232,12 +332,16 @@ export function createForms({
           aisle: 'aisle',
           product: 'product',
           bin: 'bin',
+          receipt: 'goods receipt',
+          issue: 'goods issue',
+          count: 'stock count',
+          task: 'task',
         }[entity]
       : titles[type];
     if (deleting) $('#dialog-title').textContent = 'Delete ' + entity;
     $('#submit-operation').textContent = deleting
       ? 'Delete record'
-      : type === 'count'
+      : type === 'count' && !id
         ? 'Record count'
         : 'Save';
     const record = id
@@ -252,6 +356,10 @@ export function createForms({
             aisle: 'aisles',
             product: 'products',
             bin: 'bins',
+            receipt: 'receipts',
+            issue: 'issues',
+            count: 'counts',
+            task: 'tasks',
           }[entity]
         ]?.find((r) => r.id === id)
       : null;
@@ -261,8 +369,23 @@ export function createForms({
     }
     let html = '';
     if (deleting) {
+      const deleteNotes = {
+        receipt:
+          'Deleting a goods receipt takes its quantities back out of the bins. It is refused if that stock has already left.',
+        issue:
+          'Only Pending goods issues can be deleted. Nothing has left the bins yet, so stock does not change.',
+        count:
+          'Only Pending stock counts can be deleted. Stock does not change.',
+        order: 'An order that already has a goods issue cannot be deleted.',
+        task: 'The task is removed. Stock does not change.',
+      };
       html =
-        '<p class="info-note">Only unused records can be deleted. Stock and transaction history are preserved.</p><p>Delete <strong>' +
+        '<p class="info-note">' +
+        esc(
+          deleteNotes[entity] ||
+            'Only unused records can be deleted. Stock and transaction history are preserved.',
+        ) +
+        '</p><p>Delete <strong>' +
         esc(record.name || record.id) +
         '</strong>? Enter <strong>' +
         esc(record.id) +
@@ -436,27 +559,7 @@ export function createForms({
         ) +
         '</div><p class="info-note">Open orders can be selected for goods issues. Creating an order does not change stock.</p>';
     } else if (['receipt', 'issue', 'count'].includes(type)) {
-      html = `<div class="form-grid">${
-        type === 'receipt'
-          ? field(
-              'Supplier',
-              'supplierId',
-              select('supplierId', ctx.state.suppliers, (s) => s.name),
-            )
-          : type === 'issue'
-            ? field(
-                'Customer order',
-                'orderId',
-                select(
-                  'orderId',
-                  ctx.state.orders.filter(
-                    (o) => o.status === initialOrderStatus,
-                  ),
-                  (o) => o.id + ' · ' + selectors.customerName(o.customerId),
-                ),
-              )
-            : ''
-      }${type === 'issue' ? field('Status', 'status', input('status', 'text', 'maxlength="40" value="recorded"')) + field('State of goods', 'stateOfGood', '<input name="stateOfGood" maxlength="120" placeholder="Describe the condition of the goods">') : ''}</div><h3 class="line-heading">${type === 'count' ? 'Count lines' : 'Goods lines'}</h3><p class="info-note">${type === 'count' ? 'Saving replaces stock with the counted quantities and writes stock history. The previous stock is retained for reconciliation. Complete the count before resuming movements.' : type === 'issue' ? 'Saving deducts stock immediately. Status is descriptive and does not create a draft.' : 'Select bins. Every line is checked before updating stock.'}</p><div id="form-lines">${lineForm()}</div><button type="button" id="add-line" class="button quiet add-line-button">＋ Add line</button>`;
+      html = documentForm(type, record);
     } else if (type === 'movement')
       html = `<div class="form-grid">${field(
         'Product',
@@ -487,11 +590,24 @@ export function createForms({
         ),
       )}${field('Reorder level', 'reorderLevel', input('reorderLevel', 'number', 'min="1" max="2147483647" step="1" value="1"'))}</div>`;
     else
-      html = `<div class="form-grid">${field('Task name', 'name', input('name', 'text', 'maxlength="120"'), true)}${field(
+      html = `<div class="form-grid">${field('Task name', 'name', input('name', 'text', 'maxlength="100"'), true)}${field(
         'Staff',
         'staffId',
         select('staffId', ctx.state.staff, (s) => s.name),
-      )}</div>`;
+      )}${
+        config.mode === 'http'
+          ? field(
+              'Status',
+              'status',
+              `<select name="status" required>${Object.entries(httpTaskLabels)
+                .map(
+                  ([v, l]) =>
+                    `<option value="${esc(v)}" ${v === (record?.status || 'Pending') ? 'selected' : ''}>${esc(l)}</option>`,
+                )
+                .join('')}</select>`,
+            )
+          : ''
+      }</div>`;
     $('#form-fields').innerHTML = html;
     if (['zone', 'aisle', 'bin'].includes(type) && !deleting)
       syncLocation(record);
@@ -526,6 +642,9 @@ export function createForms({
   function collectPayload() {
     const form = $('#operation-form'),
       values = Object.fromEntries(new env.FormData(form));
+    // A shipped issue being edited has no lines on the form: only its status is sent.
+    if (ctx.operation === 'issue' && !$$('.line-row', form).length)
+      return { status: values.status };
     if (['receipt', 'issue', 'count'].includes(ctx.operation))
       return {
         ...(ctx.operation === 'receipt'
@@ -536,7 +655,9 @@ export function createForms({
                 status: values.status.trim(),
                 stateOfGood: values.stateOfGood.trim(),
               }
-            : {}),
+            : values.status
+              ? { status: values.status }
+              : {}),
         lines: $$('.line-row', form).map((row) => ({
           productId: $('[name=productId]', row).value,
           binId: $('[name=binId]', row).value,

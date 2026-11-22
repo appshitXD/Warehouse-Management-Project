@@ -35,7 +35,7 @@ export function createTasks({ ctx, ui, selectors, config }) {
       `<div class="task-grid">${ctx.state.tasks
         .map(
           (t) =>
-            `<article class="task-card">${ui.badge(labels[t.status], ['done', 'Completed'].includes(t.status) ? 'green' : ['doing', 'In Progress'].includes(t.status) ? 'amber' : 'gray')}<h3>${esc(t.name)}</h3><p>${esc(t.id)}</p><div class="row-between"><span class="muted">Assigned to</span><strong class="task-assignee">${esc(selectors.staffName(t.staffId))}</strong></div>${statusSelect(t)}</article>`,
+            `<article class="task-card">${ui.badge(labels[t.status], ['done', 'Completed'].includes(t.status) ? 'green' : ['doing', 'In Progress'].includes(t.status) ? 'amber' : 'gray')}<h3>${esc(t.name)}</h3><p>${esc(t.id)}</p><div class="row-between"><span class="muted">Assigned to</span><strong class="task-assignee">${esc(selectors.staffName(t.staffId))}</strong></div>${statusSelect(t)}${ui.documentActions('task', t.id)}</article>`,
         )
         .join('')}</div>`
     );

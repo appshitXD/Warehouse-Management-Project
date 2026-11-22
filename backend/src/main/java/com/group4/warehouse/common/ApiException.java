@@ -38,4 +38,14 @@ public class ApiException extends RuntimeException {
     public static ApiException badRequest(String message) {
         return new ApiException(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message);
     }
+
+    /** 409: the record exists but its status does not allow this change (e.g. deleting a shipped issue). */
+    public static ApiException locked(String message) {
+        return new ApiException(HttpStatus.CONFLICT, "LOCKED", message);
+    }
+
+    /** 409: a record the request points at (supplier, order, staff, ...) does not exist. */
+    public static ApiException missingReference(String message) {
+        return new ApiException(HttpStatus.CONFLICT, "REFERENCE_NOT_FOUND", message);
+    }
 }

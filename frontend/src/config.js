@@ -7,10 +7,16 @@ export const API_CONFIG = {
 // Add report keys here as their endpoints become available on the backend.
 export const httpOperationReports = [];
 
-const readOnlyOperations = ['receipt', 'issue', 'count', 'task', 'order'];
+// Every operation can be saved through the API. Add a type here to make it read-only again.
+const readOnlyOperations = [];
 export const canWrite = (config, operation) =>
   config.mode !== 'http' ||
   !readOnlyOperations.includes(operation.replace(/^delete-/, ''));
+
+// Editing and deleting receipts, issues, counts and tasks is done by the backend
+// (it also moves the stock), so it is only offered in HTTP mode.
+export const canChangeDocuments = (config, type) =>
+  config.mode === 'http' && canWrite(config, type);
 
 export const showOperationReport = (config, key) =>
   config.mode !== 'http' || httpOperationReports.includes(key);
@@ -47,6 +53,20 @@ export const httpOrderLabels = {
 };
 
 export const httpTaskLabels = {
+  Pending: 'Pending',
+  'In Progress': 'In progress',
+  Completed: 'Completed',
+};
+
+// CHECK CHK_GI_STATUS: stock leaves the bins when an issue becomes Shipped or Completed.
+export const httpIssueLabels = {
+  Pending: 'Pending',
+  Shipped: 'Shipped',
+  Completed: 'Completed',
+};
+
+// CHECK CHK_SC_STATUS: stock is set to the counted quantities when a count is Completed.
+export const httpCountLabels = {
   Pending: 'Pending',
   'In Progress': 'In progress',
   Completed: 'Completed',
